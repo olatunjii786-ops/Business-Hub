@@ -294,6 +294,54 @@ async def register_webapp(request: Request):
 async def shop_webapp(request: Request, vendor_id: int):
     return templates.TemplateResponse(request, "shop.html")
 
+@app.get("/webapp/add-product/{file_id}", response_class=HTMLResponse)
+async def add_product_webapp(request: Request, file_id: str):
+    return templates.TemplateResponse(request, "add_product.html", {"file_id": file_id})
+
+@app.post("/api/vendor/products/create")
+async def create_product_with_form(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+    
+    data = await request.json()
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if not vendor or not vendor.is_active or vendor.subscription_expiry < datetime.now(timezone.utc):
+        raise HTTPException(403, "Subscription inactive")
+    
+    product = Product(
+        vendor_id=user['id'],
+        title=data['title'],
+        description=data.get('description', ''),
+        price=float(data['price']),
+        quantity=int(data['quantity']),
+        sizes=data['sizes'],
+        telegram_file_id=data['file_id']
+    )
+    db.add(product)
+    db.commit()
+    return {"status": "created", "product_id": product.id}
+
+# Replace your old photo handler with this
+@dp.message(lambda m: m.photo and m.from_user)
+async def handle_product_photo(message: types.Message):
+    user_id = message.from_user.id
+    with SessionLocal() as db:
+        vendor = db.query(Vendor).filter(Vendor.vendor_id == user_id).first()
+        if not vendor:
+            await message.answer("Register first with /start")
+            return
+    
+    file_id = message.photo[-1].file_id
+    kb = InlineKeyboardMarkup(inline_keyboard=[[
+        InlineKeyboardButton(
+            text="✨ Fill Product Details", 
+            web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/add-product/{file_id}")
+        )
+    ]])
+    await message.answer("Got your photo! Tap below to add name, price, and details:", reply_markup=kb)
+
 # === VENDOR API ENDPOINTS ===
 @app.get("/api/vendor/me")
 async def get_my_vendor(request: Request, db: Session = Depends(get_db)):
