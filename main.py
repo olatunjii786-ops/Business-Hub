@@ -484,4 +484,26 @@ async def paystack_webhook(request: Request, x_paystack_signature: str = Header(
         metadata = data.get("metadata", {})
         if metadata.get("type") == "vendor_subscription":
             v_id = int(metadata.get("vendor_id"))
-            vendor = db.query(Vend
+            vendor = db.query(Vendor).filter(Vendor.vendor_id == v_id).first()
+            if vendor:
+                vendor.is_active = True
+                vendor.subscription_expiry = datetime.now(timezone.utc) + timedelta(days=30)
+                vendor.commission_waived = False
+                db.commit()
+                await bot.send_message(v_id, "🎯 Payment Verified! Your store is live for 30 days. You now keep 95% per sale.")
+        elif metadata.get("type") == "customer_order":
+            order_id = int(metadata.get("order_id"))
+            order = db.query(Order).filter(Order.id == order_id).first()
+            if order:
+                order.payment_status = "success"
+                db.commit()
+                vendor = db.query(Vendor).filter(Vendor.vendor_id == order.vendor_id).first()
+                on_trial = vendor.commission_waived and vendor.subscription_expiry > datetime.now(timezone.utc)
+                payout_msg = f"💰 Amount: ₦{order.vendor_payout:,.2f} (100% - Trial Bonus)" if on_trial else f"💰 Amount: ₦{order.vendor_payout:,.2f} (after 5% cut)"
+                items_text = "\n".join([f"- {i['qty']}x {i['title']} ({i['size']})" for i in order.product_details])
+                await bot.send_message(
+                    order.vendor_id,
+                    f"🚨 *New Paid Order #{order.id}*\n\n{items_text}\n\n{payout_msg}\n👤 {order.customer_name}\n📞 {order.customer_phone}\n📍 {order.delivery_address}",
+                    parse_mode="Markdown"
+                )
+    return {"status": "ok"}
