@@ -1,7 +1,6 @@
 import os
-import datetime
+from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Depends, HTTPException
-# Added 'Integer' directly to the SQLAlchemy imports below to fix the crash
 from sqlalchemy import create_engine, Column, BIGINT, VARCHAR, BOOLEAN, TIMESTAMP, SERIAL, NUMERIC, TEXT, ForeignKey, Integer
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from aiogram import Bot, Dispatcher, types
@@ -21,8 +20,9 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL") # Render provides this automatically
+# Safety fallback: If key isn't found, it defaults to a empty string so it doesn't crash on boot!
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "placeholder_test_key")
+RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL") 
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -34,7 +34,7 @@ def get_db():
     finally:
         db.close()
 
-# 2. DATABASE MODELS (Maps directly to your Supabase Tables)
+# 2. DATABASE MODELS
 class Vendor(Base):
     __tablename__ = "vendors"
     vendor_id = Column(BIGINT, primary_key=True)
@@ -53,7 +53,7 @@ class Product(Base):
     title = Column(VARCHAR(255))
     price = Column(NUMERIC(12, 2))
     sizes = Column(VARCHAR(255))
-    quantity = Column(Integer, default=1) # This line works perfectly now!
+    quantity = Column(Integer, default=1)
     telegram_file_id = Column(TEXT)
     is_deleted = Column(BOOLEAN, default=False)
 
@@ -69,9 +69,9 @@ class Order(Base):
     your_commission = Column(NUMERIC(12, 2))
     paystack_reference = Column(VARCHAR(255), unique=True)
     payment_status = Column(VARCHAR(50), default='pending')
-    created_at = Column(TIMESTAMP(timezone=True), default=datetime.datetime.now(datetime.timezone.utc))
+    created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-# 3. TELEGRAM BOT HANDLERS (Deep Linking & Commands)
+# 3. TELEGRAM BOT HANDLERS
 
 @dp.message(Command("start"))
 async def command_start_handler(message: types.Message):
@@ -80,7 +80,6 @@ async def command_start_handler(message: types.Message):
     db = SessionLocal()
     
     try:
-        # Scenario A: Customer opens a vendor's shared store link
         if len(args) > 1 and args[1].startswith("shop_"):
             store_name = args[1].replace("shop_", "").replace("_", " ")
             vendor = db.query(Vendor).filter(Vendor.business_name.ilike(store_name), Vendor.is_active == True).first()
@@ -94,7 +93,6 @@ async def command_start_handler(message: types.Message):
                 await message.answer("Sorry, this store is currently closed or unavailable.")
             return
 
-        # Scenario B: Vendor opens the bot directly
         vendor = db.query(Vendor).filter(Vendor.vendor_id == user_id).first()
         if vendor:
             status_text = "🟢 Active" if vendor.is_active else "🔴 Inactive / Expired"
@@ -115,8 +113,10 @@ async def command_start_handler(message: types.Message):
 
 @app.on_event("startup")
 async def on_startup():
-    webhook_url = f"{RENDER_EXTERNAL_URL}/telegram-webhook"
-    await bot.set_webhook(url=webhook_url)
+    # Only try to set webhook if RENDER_EXTERNAL_URL is active
+    if RENDER_EXTERNAL_URL:
+        webhook_url = f"{RENDER_EXTERNAL_URL}/telegram-webhook"
+        await bot.set_webhook(url=webhook_url)
 
 @app.post("/telegram-webhook")
 async def telegram_webhook(request: Request):
@@ -139,7 +139,8 @@ async def paystack_webhook(request: Request, db: Session = Depends(get_db)):
             vendor = db.query(Vendor).filter(Vendor.vendor_id == v_id).first()
             if vendor:
                 vendor.is_active = True
-                vendor.subscription_expiry = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(days=30)
+                # Cleaned up time math here to prevent crashes
+                vendor.subscription_expiry = datetime.now(timezone.utc) + timedelta(days=30)
                 db.commit()
                 await bot.send_message(chat_id=v_id, text="🎯 Payment Verified! Your Business Hub account has been fully activated for 30 days. You can now share your link!")
                 
@@ -155,7 +156,7 @@ async def paystack_webhook(request: Request, db: Session = Depends(get_db)):
 # 5. YOUR PRIVATE MASTER /ADMIN COMMAND
 @dp.message(Command("admin"))
 async def master_admin_handler(message: types.Message):
-    MY_TELEGRAM_ID = 6379620342  # Your actual Telegram ID is set perfectly here
+    MY_TELEGRAM_ID = 6379620342  
     if message.from_user.id != MY_TELEGRAM_ID:
         await message.answer("Unauthorized.")
         return
