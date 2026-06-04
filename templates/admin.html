@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BusinessHub Admin</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #fff);
+            color: var(--tg-theme-text-color, #000);
+            padding: 16px;
+        }
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px; }
+        .card { 
+            background: var(--tg-theme-secondary-bg-color, #f0f0f0);
+            padding: 16px; border-radius: 12px;
+        }
+        .card h3 { font-size: 28px; margin-bottom: 4px; }
+        .card p { font-size: 12px; opacity: 0.7; }
+        table { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 12px; }
+        th, td { padding: 12px 8px; text-align: left; border-bottom: 1px solid var(--tg-theme-hint-color, #ddd); }
+        .badge { padding: 4px 8px; border-radius: 6px; font-size: 11px; font-weight: 700; }
+        .trial { background: #10b981; color: white; }
+        .active { background: #3b82f6; color: white; }
+        .expired { background: #ef4444; color: white; }
+        .btn { padding: 8px 14px; border: none; border-radius: 8px; cursor: pointer; font-size: 12px; font-weight: 600; }
+        .btn-approve { background: var(--tg-theme-button-color, #10b981); color: var(--tg-theme-button-text-color, #fff); }
+        .loading { text-align: center; padding: 40px; opacity: 0.5; }
+    </style>
+</head>
+<body>
+    <h2 style="margin-bottom: 16px;">BusinessHub Admin</h2>
+    
+    <div class="stats">
+        <div class="card"><h3 id="total">-</h3><p>Total Vendors</p></div>
+        <div class="card"><h3 id="active">-</h3><p>Active</p></div>
+        <div class="card"><h3 id="trial">-</h3><p>On 7-Day Free</p></div>
+        <div class="card"><h3 id="revenue">₦-</h3><p>Your Revenue</p></div>
+    </div>
+
+    <h3 style="margin: 20px 0 8px 0;">Vendors</h3>
+    <div id="tableWrap"><div class="loading">Loading...</div></div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+    tg.setHeaderColor('secondary_bg_color');
+
+    async function fetchAPI(url, options = {}) {
+        const res = await fetch(url, {
+           ...options,
+            headers: { 
+                'X-Telegram-Init-Data': tg.initData,
+                'Content-Type': 'application/json',
+               ...options.headers 
+            }
+        });
+        if (!res.ok) {
+            tg.showAlert('Error: ' + res.status);
+            throw new Error('Failed');
+        }
+        return res.json();
+    }
+
+    async function loadStats() {
+        try {
+            const data = await fetchAPI('/api/admin/stats');
+            document.getElementById('total').textContent = data.total_vendors;
+            document.getElementById('active').textContent = data.active_vendors;
+            document.getElementById('trial').textContent = data.trial_vendors;
+            document.getElementById('revenue').textContent = '₦' + data.your_revenue.toLocaleString();
+        } catch (e) { console.error(e); }
+    }
+
+    async function loadVendors() {
+        try {
+            const vendors = await fetchAPI('/api/admin/vendors');
+            const tableHTML = `
+                <table>
+                    <thead><tr><th>Business</th><th>Status</th><th>Trial Days</th><th></th></tr></thead>
+                    <tbody>
+                        ${vendors.map(v => `
+                            <tr>
+                                <td><strong>${v.business_name}</strong><br><small style="opacity:0.6">${v.phone || 'No phone'}</small></td>
+                                <td>
+                                    ${v.on_trial? '<span class="badge trial">7-DAY FREE</span>' : 
+                                      v.is_active? '<span class="badge active">ACTIVE</span>' : 
+                                      '<span class="badge expired">EXPIRED</span>'}
+                                </td>
+                                <td>${v.on_trial? v.days_left + ' days' : '-'}</td>
+                                <td>${!v.is_active? `<button class="btn btn-approve" onclick="approve(${v.id})">Approve</button>` : ''}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+            document.getElementById('tableWrap').innerHTML = tableHTML;
+        } catch (e) {
+            document.getElementById('tableWrap').innerHTML = '<div class="loading">Failed to load</div>';
+        }
+    }
+
+    async function approve(id) {
+        tg.showConfirm('Approve this vendor?', async (ok) => {
+            if (ok) {
+                await fetchAPI(`/api/admin/vendors/${id}/approve`, { method: 'POST' });
+                tg.HapticFeedback.notificationOccurred('success');
+                loadVendors();
+                loadStats();
+            }
+        });
+    }
+
+    loadStats();
+    loadVendors();
+</script>
+</body>
+</html>
