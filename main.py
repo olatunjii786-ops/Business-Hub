@@ -21,7 +21,6 @@ Base = declarative_base()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "placeholder_test_key")
-RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL") 
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -33,7 +32,7 @@ def get_db():
     finally:
         db.close()
 
-# 2. DATABASE MODELS (Fully updated to standard SQLAlchemy syntax)
+# 2. DATABASE MODELS
 class Vendor(Base):
     __tablename__ = "vendors"
     vendor_id = Column(BIGINT, primary_key=True)
@@ -70,7 +69,7 @@ class Order(Base):
     payment_status = Column(VARCHAR(50), default='pending')
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-# 3. TELEGRAM BOT HANDLERS (Deep Linking & Commands)
+# 3. TELEGRAM BOT HANDLERS
 
 @dp.message(Command("start"))
 async def command_start_handler(message: types.Message):
@@ -79,7 +78,7 @@ async def command_start_handler(message: types.Message):
     db = SessionLocal()
     
     try:
-        # Scenario A: Customer opens a vendor's shared store link
+        # Scenario A: Customer opens a store link
         if len(args) > 1 and args[1].startswith("shop_"):
             store_name = args[1].replace("shop_", "").replace("_", " ")
             vendor = db.query(Vendor).filter(Vendor.business_name.ilike(store_name), Vendor.is_active == True).first()
@@ -93,7 +92,7 @@ async def command_start_handler(message: types.Message):
                 await message.answer("Sorry, this store is currently closed or unavailable.")
             return
 
-        # Scenario B: Vendor opens the bot directly
+        # Scenario B: Vendor opens the bot
         vendor = db.query(Vendor).filter(Vendor.vendor_id == user_id).first()
         if vendor:
             status_text = "🟢 Active" if vendor.is_active else "🔴 Inactive / Expired"
@@ -103,7 +102,6 @@ async def command_start_handler(message: types.Message):
             ])
             await message.answer(f"Welcome back, Boss!\nStore Status: {status_text}\n\nUse the dashboard below to manage stock or update clothes.", reply_markup=kb)
         else:
-            # Random user or unregistered vendor signup route
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="🚀 Register My Business", web_app=WebAppInfo(url="https://yourfrontend.com/register"))
             ]])
@@ -111,13 +109,19 @@ async def command_start_handler(message: types.Message):
     finally:
         db.close()
 
-# 4. FASTAPI DEPLOYMENT ROUTING & PAYSTACK WEBHOOKS
+# 4. FASTAPI DEPLOYMENT ROUTING & TELEGRAM AUTOMATION
 
 @app.on_event("startup")
 async def on_startup():
-    if RENDER_EXTERNAL_URL:
-        webhook_url = f"{RENDER_EXTERNAL_URL}/telegram-webhook"
+    # ⚠️ CHANGE THIS to your exact Render Web Service URL string
+    MY_LIVE_RENDER_URL = "https://business-hub-backend.onrender.com" 
+    
+    webhook_url = f"{MY_LIVE_RENDER_URL}/telegram-webhook"
+    try:
         await bot.set_webhook(url=webhook_url)
+        print(f"🚀 WEBHOOK CONNECTED TO TELEGRAM: {webhook_url}")
+    except Exception as e:
+        print(f"❌ WEBHOOK CONNECTION FAILED: {e}")
 
 @app.post("/telegram-webhook")
 async def telegram_webhook(request: Request):
@@ -135,7 +139,6 @@ async def paystack_webhook(request: Request, db: Session = Depends(get_db)):
         reference = data.get("reference")
         metadata = data.get("metadata", {})
         
-        # Scenario 1: Subscription payment verification
         if metadata.get("type") == "vendor_subscription":
             v_id = metadata.get("vendor_id")
             vendor = db.query(Vendor).filter(Vendor.vendor_id == v_id).first()
@@ -145,7 +148,6 @@ async def paystack_webhook(request: Request, db: Session = Depends(get_db)):
                 db.commit()
                 await bot.send_message(chat_id=v_id, text="🎯 Payment Verified! Your Business Hub account has been fully activated for 30 days. You can now share your link!")
                 
-        # Scenario 2: Clothes checkout payment verification
         elif metadata.get("type") == "customer_order":
             order = db.query(Order).filter(Order.paystack_reference == reference).first()
             if order:
@@ -155,7 +157,7 @@ async def paystack_webhook(request: Request, db: Session = Depends(get_db)):
 
     return {"status": "accepted"}
 
-# 5. YOUR PRIVATE MASTER /ADMIN COMMAND
+# 5. PRIVATE MASTER ADMIN COMMAND
 @dp.message(Command("admin"))
 async def master_admin_handler(message: types.Message):
     MY_TELEGRAM_ID = 6379620342  
