@@ -242,11 +242,65 @@ async def create_product(request: Request, data: ProductCreate, db: Session = De
     db.commit()
     return {"status": "created", "product_id": product.id}
 
+from sqlalchemy.exc import IntegrityError
+
 @app.post("/api/vendor/register/{telegram_id}")
 async def register_vendor(telegram_id: int, data: VendorReg, db: Session = Depends(get_db)):
+    # 1. Check if telegram_id already registered
     existing = db.query(Vendor).filter(Vendor.vendor_id == telegram_id).first()
     if existing:
-        raise HTTPException(400, "Already registered")
+        raise HTTPException(400, "You already have a registered business")
+    
+    # 2. Check if business name taken - case insensitive
+    clean_name = data.business_name.strip()
+    name_exists = db.query(Vendor).filter(
+        func.lower(Vendor.business_name) == clean_name.lower()
+    ).first()
+    if name_exists:
+        raise HTTPException(400, "Business name already taken. Try another one")
+    
+    try:
+        # 3. Create Paystack subaccount
+        async with httpx.AsyncClient() as client:
+            res = await client.post(
+                "https://api.paystack.co/subaccount",
+                headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
+                json={
+                    "business_name": clean_name,
+                    "settlement_bank": data.bank_name,
+                    "account_number": data.account_number,
+                    "percentage_charge": 0
+                },
+                timeout=10.0
+            )
+            if res.status_code!= 200:
+                error_msg = res.json().get("message", "Bank verification failed")
+                raise HTTPException(400, f"Bank error: {error_msg}")
+            subaccount = res.json()["data"]["subaccount_code"]
+
+        # 4. Create vendor
+        vendor = Vendor(
+            vendor_id=telegram_id,
+            business_name=clean_name,
+            phone_number=data.phone_number.strip(),
+            paystack_subaccount=subaccount,
+            is_active=True,
+            subscription_expiry=datetime.now(timezone.utc) + timedelta(days=7),
+            commission_waived=True
+        )
+        db.add(vendor)
+        db.commit()
+        return {"status": "success", "trial_days": 7}
+        
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(400, "Business name already taken")
+    except httpx.TimeoutException:
+        raise HTTPException(500, "Bank verification timed out. Try again")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Registration error: {e}")
+        raise HTTPException(500, "Registration failed. Please try again")
 
     # Create Paystack subaccount
     async with httpx.AsyncClient() as client:
