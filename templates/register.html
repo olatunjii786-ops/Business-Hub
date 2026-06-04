@@ -117,8 +117,15 @@
             tg.HapticFeedback.notificationOccurred('success');
             tg.showAlert('🎉 Trial activated! Your store is live for 7 days.', () => tg.close());
         } catch (e) {
-            tg.HapticFeedback.notificationOccurred('error');
-            tg.showAlert('Error: Business name may already be taken');
+    tg.HapticFeedback.notificationOccurred('error');
+    const errorText = await e.text?.() || 'Registration failed';
+    try {
+        const errorJson = JSON.parse(errorText);
+        tg.showAlert(errorJson.detail || 'Registration failed');
+    } catch {
+        tg.showAlert('Registration failed. Check your details and try again');
+    }
+}
         } finally {
             tg.MainButton.hideProgress();
             tg.MainButton.enable();
