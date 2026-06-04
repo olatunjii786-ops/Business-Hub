@@ -280,9 +280,66 @@ async def healthcheck():
 @app.get("/webapp/admin", response_class=HTMLResponse)
 async def admin_webapp(request: Request):
     return templates.TemplateResponse(request, "admin.html")
+
+# === VENDOR WEBAPP === ← START PASTE HERE
+@app.get("/webapp/vendor", response_class=HTMLResponse)
+async def vendor_webapp(request: Request):
+    return templates.TemplateResponse(request, "vendor.html")
+
+@app.get("/webapp/register", response_class=HTMLResponse)
+async def register_webapp(request: Request):
+    return templates.TemplateResponse(request, "register.html")
+
+@app.get("/webapp/shop/{vendor_id}", response_class=HTMLResponse)
+async def shop_webapp(request: Request, vendor_id: int):
+    return templates.TemplateResponse(request, "shop.html")
+
+# === VENDOR API ENDPOINTS ===
+@app.get("/api/vendor/me")
+async def get_my_vendor(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    if not init_data:
+        raise HTTPException(403, "Missing auth")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
     
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if not vendor:
+        raise HTTPException(404, "Not registered")
+    
+    now = datetime.now(timezone.utc)
+    on_trial = vendor.commission_waived and vendor.subscription_expiry > now
+    days_left = max(0, (vendor.subscription_expiry - now).days) if vendor.subscription_expiry > now else 0
+    
+    return {
+        "vendor_id": vendor.vendor_id,
+        "business_name": vendor.business_name,
+        "is_active": vendor.is_active,
+        "subscription_expiry": vendor.subscription_expiry.isoformat() if vendor.subscription_expiry else None,
+        "days_left": days_left,
+        "on_trial": on_trial,
+        "has_subaccount": bool(vendor.paystack_subaccount)
+    }
+
+@app.get("/api/vendor/products")
+async def get_my_products(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+    
+    products = db.query(Product).filter(
+        Product.vendor_id == user['id'],
+        Product.is_deleted == False
+    ).order_by(Product.created_at.desc()).all()
+    
+    return [{"id": p.id, "title": p.title, "price": float(p.price), "quantity": p.quantity, "is_active": p.is_active} for p in products]
+# === END PASTE HERE ===
+
 @app.get("/api/admin/stats")
 async def admin_stats(user = Depends(require_admin), db: Session = Depends(get_db)):
+    
     vendors = db.query(Vendor).all()
     total = len(vendors)
     now = datetime.now(timezone.utc)
