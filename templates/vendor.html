@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Dashboard</title>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        :root {
+            --radius: 16px;
+            --shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #f5f5f5);
+            color: var(--tg-theme-text-color, #000);
+            padding: 0 20px 0;
+            -webkit-font-smoothing: antialiased;
+        }
+        .container { padding: 16px; max-width: 600px; margin: 0 auto; }
+        .header { margin: 8px 0 20px 0; }
+        .header h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; }
+        .header p { opacity: 0.6; font-size: 15px; margin-top: 4px; }
+        
+        .banner { 
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            color: white; padding: 24px; border-radius: var(--radius); 
+            margin-bottom: 20px; box-shadow: var(--shadow);
+        }
+        .banner.expired { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
+        .banner.warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
+        .banner h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
+        .banner p { opacity: 0.95; font-size: 14px; line-height: 1.4; }
+        
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+        .btn { 
+            background: var(--tg-theme-button-color, #007aff); 
+            color: var(--tg-theme-button-text-color, #fff);
+            border: none; border-radius: 14px; padding: 16px; 
+            font-size: 15px; font-weight: 600; cursor: pointer;
+            transition: transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px;
+        }
+        .btn:active { transform: scale(0.96); }
+        .btn-secondary { 
+            background: var(--tg-theme-secondary-bg-color, #e5e5ea);
+            color: var(--tg-theme-text-color, #000);
+        }
+        
+        .section-title { font-size: 20px; font-weight: 700; margin: 32px 0 16px 0; }
+        .product { 
+            background: var(--tg-theme-secondary-bg-color, #fff);
+            padding: 16px; border-radius: var(--radius); margin-bottom: 10px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        }
+        .product-info strong { font-size: 16px; font-weight: 600; }
+        .product-info span { opacity: 0.6; font-size: 13px; display: block; margin-top: 4px; }
+        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
+        .status-dot.off { background: #9ca3af; }
+        
+        .empty { text-align: center; padding: 60px 20px; opacity: 0.5; }
+        .empty-icon { font-size: 48px; margin-bottom: 12px; }
+        .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: loading 1.5s infinite; border-radius: 8px; }
+        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1 id="storeName">Dashboard</h1>
+            <p>Manage your store</p>
+        </div>
+        
+        <div id="banner" class="banner">
+            <div class="skeleton" style="height: 24px; width: 60%; margin-bottom: 8px;"></div>
+            <div class="skeleton" style="height: 16px; width: 80%;"></div>
+        </div>
+        
+        <div class="grid">
+            <button class="btn" onclick="addProduct()">
+                <span>➕</span> Add Product
+            </button>
+            <button class="btn btn-secondary" onclick="getShopLink()">
+                <span>🔗</span> Share Link
+            </button>
+        </div>
+        
+        <div class="section-title">Products</div>
+        <div id="products">
+            <div class="product"><div class="skeleton" style="height: 20px; width: 70%;"></div></div>
+        </div>
+    </div>
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+    tg.setHeaderColor('secondary_bg_color');
+    let vendorData = null;
+
+    async function api(url, options = {}) {
+        const res = await fetch(url, {
+           ...options,
+            headers: { 
+                'X-Telegram-Init-Data': tg.initData,
+                'Content-Type': 'application/json',
+               ...options.headers 
+            }
+        });
+        if (!res.ok) throw new Error('Request failed');
+        return res.json();
+    }
+
+    async function init() {
+        try {
+            vendorData = await api('/api/vendor/me');
+            document.getElementById('storeName').textContent = vendorData.business_name;
+            const banner = document.getElementById('banner');
+            
+            if (vendorData.on_trial) {
+                banner.innerHTML = `<h2>🎉 7-Day Free Trial</h2><p>You keep 100% of all sales for ${vendorData.days_left} more days. No commission.</p>`;
+            } else if (vendorData.is_active && vendorData.days_left > 5) {
+                banner.innerHTML = `<h2>🟢 Store Active</h2><p>${vendorData.days_left} days remaining. You keep 95% per sale.</p>`;
+            } else if (vendorData.is_active) {
+                banner.classList.add('warning');
+                banner.innerHTML = `<h2>⚠️ Expiring Soon</h2><p>Only ${vendorData.days_left} days left. Renew to avoid downtime.</p>`;
+                tg.MainButton.setText('Renew ₦3,000').show().onClick(renew);
+            } else {
+                banner.classList.add('expired');
+                banner.innerHTML = `<h2>🔴 Store Paused</h2><p>Renew subscription to start selling again</p>`;
+                tg.MainButton.setText('Renew ₦3,000').show().onClick(renew);
+            }
+            loadProducts();
+        } catch (e) {
+            document.getElementById('banner').innerHTML = '<h2>Not Registered</h2><p>Open /start in bot to register first</p>';
+        }
+    }
+
+    async function loadProducts() {
+        try {
+            const products = await api('/api/vendor/products');
+            if (products.length === 0) {
+                document.getElementById('products').innerHTML = `
+                    <div class="empty">
+                        <div class="empty-icon">📦</div>
+                        <strong>No products yet</strong><br>
+                        <span style="font-size: 14px; opacity: 0.6;">Add your first product to start selling</span>
+                    </div>`;
+                return;
+            }
+            document.getElementById('products').innerHTML = products.map(p => `
+                <div class="product">
+                    <div class="product-info">
+                        <strong>${p.title}</strong>
+                        <span>₦${p.price.toLocaleString()} • ${p.quantity} in stock</span>
+                    </div>
+                    <div class="status-dot ${p.is_active ? '' : 'off'}"></div>
+                </div>
+            `).join('');
+        } catch (e) {
+            document.getElementById('products').innerHTML = '<div class="empty">Failed to load</div>';
+        }
+    }
+
+    function addProduct() {
+        tg.showAlert('Product upload coming next: Send photos to bot → auto-adds to catalog');
+    }
+
+    async function getShopLink() {
+        if (!vendorData) return;
+        const botInfo = await tg.requestContact; // placeholder
+        const slug = vendorData.business_name.toLowerCase().replace(/ /g, '_');
+        const link = `https://t.me/BusinessHubBot?start=shop_${slug}`; // Replace with your bot username
+        tg.HapticFeedback.notificationOccurred('success');
+        tg.showPopup({
+            title: 'Your Shop Link',
+            message: link,
+            buttons: [{type: 'default', text: 'Copy', id: 'copy'}, {type: 'cancel'}]
+        }, (id) => { if(id === 'copy') navigator.clipboard.writeText(link); });
+    }
+
+    async function renew() {
+        tg.MainButton.showProgress();
+        try {
+            const res = await api(`/api/vendor/subscribe/${vendorData.vendor_id}`, { method: 'POST' });
+            tg.openLink(res.authorization_url);
+        } catch (e) {
+            tg.showAlert('Failed to start payment');
+        } finally {
+            tg.MainButton.hideProgress();
+        }
+    }
+
+    init();
+</script>
+</body>
+  </html>
