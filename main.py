@@ -6,6 +6,8 @@ from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from fastapi import FastAPI, Request, Depends, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
 from sqlalchemy import create_engine, Column, BIGINT, VARCHAR, BOOLEAN, TIMESTAMP, NUMERIC, TEXT, ForeignKey, Integer, func, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session, relationship
 from sqlalchemy.dialects.postgresql import JSONB
@@ -14,45 +16,45 @@ from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
 from aiogram.types import WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
 from pydantic import BaseModel
+from urllib.parse import parse_qsl
 import httpx
+import json
 
 # 1. LOGGING & INIT
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Business Hub Engine")
+templates = Jinja2Templates(directory="templates")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # Replace with your TMA domain in prod
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# 2. DATABASE - FIXED FOR RENDER + SUPABASE
+# 2. CONFIG FROM RENDER ENV VARS
 DATABASE_URL = os.getenv("DATABASE_URL")
-if not DATABASE_URL:
-    raise ValueError("DATABASE_URL env var missing")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY") # Get from Paystack when ready
+ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0")) # Add this in Render
+RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 
-# Use Session Pooler URL from Supabase + force SSL + timeout
+if not DATABASE_URL or not BOT_TOKEN:
+    raise ValueError("DATABASE_URL and BOT_TOKEN are required in Render env vars")
+
+PLATFORM_COMMISSION = 0.05
+
+# 3. DATABASE
 engine = create_engine(
     DATABASE_URL,
     pool_pre_ping=True,
     pool_recycle=300,
-    connect_args={
-        "sslmode": "require",
-        "connect_timeout": 10
-    }
+    connect_args={"sslmode": "require", "connect_timeout": 10}
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
-
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN env var missing")
-
-PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
-PLATFORM_COMMISSION = 0.05
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
@@ -64,7 +66,7 @@ def get_db():
     finally:
         db.close()
 
-# 3. DATABASE MODELS
+# 4. DATABASE MODELS - WITH 7-DAY TRIAL
 class Vendor(Base):
     __tablename__ = "vendors"
     vendor_id = Column(BIGINT, primary_key=True)
@@ -75,6 +77,8 @@ class Vendor(Base):
     paystack_subaccount = Column(VARCHAR(100))
     is_active = Column(BOOLEAN, default=False)
     subscription_expiry = Column(TIMESTAMP(timezone=True))
+    commission_waived = Column(BOOLEAN, default=False)
+    trial_used = Column(BOOLEAN, default=False)
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     products = relationship("Product", back_populates="vendor")
     orders = relationship("Order", back_populates="vendor")
@@ -114,7 +118,7 @@ class Order(Base):
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
     vendor = relationship("Vendor", back_populates="orders")
 
-# 4. PYDANTIC SCHEMAS
+# 5. PYDANTIC SCHEMAS
 class VendorRegister(BaseModel):
     business_name: str
     phone_number: str
@@ -141,8 +145,34 @@ class CheckoutRequest(BaseModel):
     delivery_address: str
     items: List[CartItem]
 
-# 5. HELPERS
+# 6. HELPERS
+def validate_init_data(init_data: str):
+    try:
+        parsed = dict(parse_qsl(init_data))
+        hash_check = parsed.pop('hash')
+        data_check = '\n'.join(f"{k}={v}" for k, v in sorted(parsed.items()))
+        secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        hash_calc = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+        if hash_calc!= hash_check:
+            return None
+        return json.loads(parsed['user'])
+    except:
+        return None
+
+def require_admin(request: Request):
+    if ADMIN_TELEGRAM_ID == 0:
+        raise HTTPException(500, "ADMIN_TELEGRAM_ID not set in env")
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    if not init_data:
+        raise HTTPException(403, "Missing auth")
+    user = validate_init_data(init_data)
+    if not user or user['id']!= ADMIN_TELEGRAM_ID:
+        raise HTTPException(403, "Admin only")
+    return user
+
 async def create_paystack_subaccount(vendor: Vendor) -> str:
+    if not PAYSTACK_SECRET_KEY:
+        raise HTTPException(500, "PAYSTACK_SECRET_KEY not set. Add it in Render env vars.")
     url = "https://api.paystack.co/subaccount"
     headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}", "Content-Type": "application/json"}
     payload = {
@@ -159,18 +189,18 @@ async def create_paystack_subaccount(vendor: Vendor) -> str:
         raise HTTPException(400, f"Paystack subaccount failed: {data.get('message')}")
 
 def verify_paystack_signature(payload: bytes, signature: str) -> bool:
+    if not PAYSTACK_SECRET_KEY:
+        return False
     hash = hmac.new(PAYSTACK_SECRET_KEY.encode(), payload, hashlib.sha512).hexdigest()
     return hash == signature
 
-# 6. TELEGRAM HANDLERS WITH ERROR HANDLING
+# 7. TELEGRAM HANDLERS
 @dp.message(Command("start"))
 async def command_start_handler(message: types.Message):
     try:
         user_id = message.from_user.id
         args = message.text.split()
-
         with SessionLocal() as db:
-            # Scenario A: Customer opens store link
             if len(args) > 1 and args[1].startswith("shop_"):
                 store_slug = args[1].replace("shop_", "").replace("_", " ")
                 vendor = db.query(Vendor).filter(
@@ -178,55 +208,38 @@ async def command_start_handler(message: types.Message):
                     Vendor.is_active == True,
                     Vendor.subscription_expiry > datetime.now(timezone.utc)
                 ).first()
-
                 if vendor:
                     kb = InlineKeyboardMarkup(inline_keyboard=[[
-                        InlineKeyboardButton(
-                            text="🛒 Open Catalog",
-                            web_app=WebAppInfo(url=f"https://yourfrontend.com/shop/{vendor.vendor_id}")
-                        )
+                        InlineKeyboardButton(text="🛒 Open Catalog", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/shop/{vendor.vendor_id}"))
                     ]])
-                    await message.answer(
-                        f"Welcome to *{vendor.business_name}*!\n\nTap below to view our collection and order.",
-                        parse_mode="Markdown", reply_markup=kb
-                    )
+                    await message.answer(f"Welcome to *{vendor.business_name}*!\n\nTap below to view our collection.", parse_mode="Markdown", reply_markup=kb)
                 else:
                     await message.answer("Sorry, this store is currently closed or subscription expired.")
                 return
 
-            # Scenario B: Vendor flow
             vendor = db.query(Vendor).filter(Vendor.vendor_id == user_id).first()
             if vendor:
-                if vendor.is_active and vendor.subscription_expiry and vendor.subscription_expiry > datetime.now(timezone.utc):
-                    status = "🟢 Active"
+                now = datetime.now(timezone.utc)
+                on_trial = vendor.commission_waived and vendor.subscription_expiry > now
+                if vendor.is_active and vendor.subscription_expiry > now:
+                    status = "🟢 Active" + (" (7-DAY FREE)" if on_trial else "")
                     expiry = vendor.subscription_expiry.strftime("%d %b %Y")
                 else:
                     status = "🔴 Inactive - Renew Subscription"
                     expiry = "Expired"
-
                 kb = InlineKeyboardMarkup(inline_keyboard=[
-                    [InlineKeyboardButton(text="⚙️ Vendor Dashboard", web_app=WebAppInfo(url="https://yourfrontend.com/dashboard"))],
+                    [InlineKeyboardButton(text="⚙️ Vendor Dashboard", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/vendor"))],
                     [InlineKeyboardButton(text="🔗 Get My Shop Link", callback_data=f"getlink_{vendor.vendor_id}")]
                 ])
-                await message.answer(
-                    f"Welcome back, Boss!\n\nStore Status: {status}\nExpiry: {expiry}\n\nManage products and view orders below.",
-                    reply_markup=kb
-                )
+                await message.answer(f"Welcome back, Boss!\n\nStore Status: {status}\nExpiry: {expiry}", reply_markup=kb)
             else:
                 kb = InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="🚀 Register My Business", web_app=WebAppInfo(url="https://yourfrontend.com/register"))
+                    InlineKeyboardButton(text="🚀 Register My Business", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/register"))
                 ]])
-                await message.answer(
-                    "Welcome to *Business Hub*! 🚀\n\nAutomate your fashion store inside Telegram. Register below to activate split payments, inventory, and auto-checkouts.",
-                    parse_mode="Markdown", reply_markup=kb
-                )
-
-    except OperationalError as e:
-        logger.error(f"DB error on /start: {e}")
-        await message.answer("⚠️ Database is starting up. Please try again in 10 seconds.")
+                await message.answer("Welcome to *Business Hub*! 🚀\n\nRegister to get 7 DAYS FREE - keep 100% of sales.", parse_mode="Markdown", reply_markup=kb)
     except Exception as e:
-        logger.error(f"Unexpected error in /start: {e}")
-        await message.answer("Something went wrong. Please try again.")
+        logger.error(f"Error in /start: {e}")
+        await message.answer("Something went wrong. Try again.")
 
 @dp.callback_query(lambda c: c.data.startswith("getlink_"))
 async def send_shop_link(callback: types.CallbackQuery):
@@ -238,7 +251,7 @@ async def send_shop_link(callback: types.CallbackQuery):
                 slug = vendor.business_name.lower().replace(" ", "_")
                 bot_info = await bot.get_me()
                 link = f"https://t.me/{bot_info.username}?start=shop_{slug}"
-                await callback.message.answer(f"Your shop link:\n`{link}`\n\nShare this on Instagram, WhatsApp, or Facebook.", parse_mode="Markdown")
+                await callback.message.answer(f"Your shop link:\n`{link}`\n\nShare this!", parse_mode="Markdown")
         await callback.answer()
     except Exception as e:
         logger.error(f"Error in getlink: {e}")
@@ -246,31 +259,14 @@ async def send_shop_link(callback: types.CallbackQuery):
 
 @dp.message(Command("admin"))
 async def master_admin_handler(message: types.Message):
-    MY_TELEGRAM_ID = 6379620342
-    if message.from_user.id!= MY_TELEGRAM_ID:
+    if message.from_user.id!= ADMIN_TELEGRAM_ID:
         return
+    markup = types.InlineKeyboardMarkup(inline_keyboard=[[
+        types.InlineKeyboardButton(text="📊 Open Dashboard", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/admin"))
+    ]])
+    await message.answer("BusinessHub Admin Panel", reply_markup=markup)
 
-    try:
-        with SessionLocal() as db:
-            total_vendors = db.query(Vendor).count()
-            active_vendors = db.query(Vendor).filter(
-                Vendor.is_active == True,
-                Vendor.subscription_expiry > datetime.now(timezone.utc)
-            ).count()
-            revenue = db.query(func.sum(Order.your_commission)).filter(Order.payment_status == "success").scalar() or 0
-
-            await message.answer(
-                f"📊 **MASTER CONTROL PANEL**\n\n"
-                f"👥 Total Vendors: {total_vendors}\n"
-                f"🟢 Active Stores: {active_vendors}\n"
-                f"💰 Your Total Commissions: ₦{revenue:,.2f}",
-                parse_mode="Markdown"
-            )
-    except Exception as e:
-        logger.error(f"Admin panel error: {e}")
-        await message.answer("Error loading dashboard")
-
-# 7. FASTAPI ROUTES
+# 8. FASTAPI ROUTES
 @app.get("/health")
 async def healthcheck():
     try:
@@ -280,36 +276,88 @@ async def healthcheck():
     except Exception as e:
         return {"status": "error", "db": str(e)}
 
+# === ADMIN WEBAPP ===
+@app.get("/webapp/admin", response_class=HTMLResponse)
+async def admin_webapp(request: Request):
+    return templates.TemplateResponse("admin.html", {"request": request})
+
+@app.get("/api/admin/stats")
+async def admin_stats(user = Depends(require_admin), db: Session = Depends(get_db)):
+    vendors = db.query(Vendor).all()
+    total = len(vendors)
+    now = datetime.now(timezone.utc)
+    trial = sum(1 for v in vendors if v.commission_waived and v.subscription_expiry > now)
+    active = sum(1 for v in vendors if v.is_active and v.subscription_expiry > now)
+    revenue = db.query(func.sum(Order.your_commission)).filter(Order.payment_status == "success").scalar() or 0
+    return {"total_vendors": total, "active_vendors": active, "trial_vendors": trial, "your_revenue": float(revenue)}
+
+@app.get("/api/admin/vendors")
+async def admin_vendors(user = Depends(require_admin), db: Session = Depends(get_db)):
+    vendors = db.query(Vendor).order_by(Vendor.created_at.desc()).all()
+    now = datetime.now(timezone.utc)
+    result = []
+    for v in vendors:
+        expiry = v.subscription_expiry
+        days_left = max(0, (expiry - now).days) if expiry and expiry > now else 0
+        on_trial = v.commission_waived and expiry > now
+        result.append({
+            "id": v.vendor_id,
+            "business_name": v.business_name,
+            "phone": v.phone_number,
+            "is_active": v.is_active,
+            "days_left": days_left,
+            "on_trial": on_trial
+        })
+    return result
+
+@app.post("/api/admin/vendors/{vendor_id}/approve")
+async def approve_vendor(vendor_id: int, user = Depends(require_admin), db: Session = Depends(get_db)):
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == vendor_id).first()
+    if vendor:
+        vendor.is_active = True
+        db.commit()
+    return {"status": "approved"}
+
+# === VENDOR REGISTRATION - 7 DAY FREE TRIAL ===
 @app.post("/api/vendor/register/{telegram_id}")
 async def register_vendor(telegram_id: int, data: VendorRegister, db: Session = Depends(get_db)):
     existing = db.query(Vendor).filter(Vendor.vendor_id == telegram_id).first()
     if existing:
         raise HTTPException(400, "Vendor already registered")
-
-    vendor = Vendor(vendor_id=telegram_id, **data.dict())
+    
+    vendor = Vendor(
+        vendor_id=telegram_id,
+        **data.dict(),
+        is_active=True,
+        subscription_expiry=datetime.now(timezone.utc) + timedelta(days=7),
+        commission_waived=True,
+        trial_used=True
+    )
     db.add(vendor)
     db.commit()
-
-    try:
-        subaccount_code = await create_paystack_subaccount(vendor)
-        vendor.paystack_subaccount = subaccount_code
-        db.commit()
-    except Exception as e:
-        logger.error(f"Subaccount failed: {e}")
-
-    return {"status": "registered", "next_step": "pay_subscription"}
+    
+    if PAYSTACK_SECRET_KEY:
+        try:
+            subaccount_code = await create_paystack_subaccount(vendor)
+            vendor.paystack_subaccount = subaccount_code
+            db.commit()
+        except Exception as e:
+            logger.error(f"Subaccount failed: {e}")
+    
+    return {"status": "registered", "trial_days": 7, "message": "7-day free trial activated"}
 
 @app.post("/api/vendor/subscribe/{telegram_id}")
 async def init_subscription(telegram_id: int, db: Session = Depends(get_db)):
+    if not PAYSTACK_SECRET_KEY:
+        raise HTTPException(500, "PAYSTACK_SECRET_KEY not set")
     vendor = db.query(Vendor).filter(Vendor.vendor_id == telegram_id).first()
     if not vendor:
         raise HTTPException(404, "Vendor not found")
-
     url = "https://api.paystack.co/transaction/initialize"
     headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
     payload = {
         "email": f"vendor{telegram_id}@businesshub.ng",
-        "amount": 200000,
+        "amount": 300000,
         "metadata": {"type": "vendor_subscription", "vendor_id": telegram_id}
     }
     async with httpx.AsyncClient() as client:
@@ -325,7 +373,6 @@ async def get_vendor_products(vendor_id: int, db: Session = Depends(get_db)):
     ).first()
     if not vendor:
         raise HTTPException(404, "Store inactive")
-
     products = db.query(Product).filter(
         Product.vendor_id == vendor_id,
         Product.is_active == True,
@@ -337,20 +384,22 @@ async def get_vendor_products(vendor_id: int, db: Session = Depends(get_db)):
 @app.post("/api/vendor/{vendor_id}/products")
 async def add_product(vendor_id: int, product: ProductCreate, db: Session = Depends(get_db)):
     vendor = db.query(Vendor).filter(Vendor.vendor_id == vendor_id).first()
-    if not vendor or not vendor.is_active:
+    if not vendor or not vendor.is_active or vendor.subscription_expiry < datetime.now(timezone.utc):
         raise HTTPException(403, "Subscription inactive")
-
     db_product = Product(vendor_id=vendor_id, **product.dict())
     db.add(db_product)
     db.commit()
     return {"status": "added", "product_id": db_product.id}
 
+# === CHECKOUT - 0% COMMISSION DURING TRIAL ===
 @app.post("/api/checkout")
 async def customer_checkout(data: CheckoutRequest, db: Session = Depends(get_db)):
+    if not PAYSTACK_SECRET_KEY:
+        raise HTTPException(500, "PAYSTACK_SECRET_KEY not set")
     vendor = db.query(Vendor).filter(Vendor.vendor_id == data.vendor_id).first()
     if not vendor or not vendor.paystack_subaccount:
         raise HTTPException(400, "Vendor cannot accept payments yet")
-
+    
     subtotal = 0
     items_json = []
     for item in data.items:
@@ -360,11 +409,18 @@ async def customer_checkout(data: CheckoutRequest, db: Session = Depends(get_db)
         subtotal += float(product.price) * item.quantity
         items_json.append({"product_id": item.product_id, "title": product.title, "qty": item.quantity, "size": item.size})
         product.quantity -= item.quantity
-
-    commission = round(subtotal * PLATFORM_COMMISSION, 2)
-    vendor_payout = round(subtotal - commission, 2)
+    
+    now = datetime.now(timezone.utc)
+    on_trial = vendor.commission_waived and vendor.subscription_expiry > now
+    
+    if on_trial:
+        commission = 0
+        vendor_payout = subtotal
+    else:
+        commission = round(subtotal * PLATFORM_COMMISSION, 2)
+        vendor_payout = round(subtotal - commission, 2)
+    
     total = subtotal
-
     order = Order(
         vendor_id=data.vendor_id,
         customer_name=data.customer_name,
@@ -378,7 +434,7 @@ async def customer_checkout(data: CheckoutRequest, db: Session = Depends(get_db)
     )
     db.add(order)
     db.commit()
-
+    
     url = "https://api.paystack.co/transaction/initialize"
     headers = {"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"}
     payload = {
@@ -393,19 +449,18 @@ async def customer_checkout(data: CheckoutRequest, db: Session = Depends(get_db)
         pay_data = r.json()["data"]
         order.paystack_reference = pay_data["reference"]
         db.commit()
-
     return {"payment_url": pay_data["authorization_url"], "order_id": order.id}
 
-# 8. WEBHOOKS
+# 9. WEBHOOKS
 @app.on_event("startup")
 async def on_startup():
-    RENDER_URL = os.getenv("RENDER_EXTERNAL_URL", "https://business-hub-9rce.onrender.com")
+    if not RENDER_URL:
+        logger.warning("RENDER_EXTERNAL_URL not set. Webhook not configured.")
+        return
     webhook_url = f"{RENDER_URL}/telegram-webhook"
     await bot.delete_webhook(drop_pending_updates=True)
     result = await bot.set_webhook(url=webhook_url, allowed_updates=["message", "callback_query"])
     logger.info(f"Webhook set: {result} | URL: {webhook_url}")
-    webhook_info = await bot.get_webhook_info()
-    logger.info(f"Webhook info: {webhook_info}")
 
 @app.on_event("shutdown")
 async def on_shutdown():
@@ -417,49 +472,15 @@ async def telegram_webhook(request: Request):
     await dp.feed_webhook_update(bot, update)
     return {"ok": True}
 
-@app.get("/set_webhook_debug")
-async def debug_webhook():
-    info = await bot.get_webhook_info()
-    return {
-        "url": info.url,
-        "pending_update_count": info.pending_update_count,
-        "last_error_date": info.last_error_date,
-        "last_error_message": info.last_error_message
-    }
-
 @app.post("/api/v1/payments/webhook")
 async def paystack_webhook(request: Request, x_paystack_signature: str = Header(None), db: Session = Depends(get_db)):
     body = await request.body()
     if not verify_paystack_signature(body, x_paystack_signature):
         raise HTTPException(400, "Invalid signature")
-
     payload = await request.json()
     event = payload.get("event")
     data = payload.get("data")
-
     if event == "charge.success":
         metadata = data.get("metadata", {})
         if metadata.get("type") == "vendor_subscription":
-            v_id = int(metadata.get("vendor_id"))
-            vendor = db.query(Vendor).filter(Vendor.vendor_id == v_id).first()
-            if vendor:
-                vendor.is_active = True
-                vendor.subscription_expiry = datetime.now(timezone.utc) + timedelta(days=30)
-                db.commit()
-                await bot.send_message(v_id, "🎯 Payment Verified! Your store is live for 30 days. Share your link to start selling!")
-
-        elif metadata.get("type") == "customer_order":
-            order_id = int(metadata.get("order_id"))
-            order = db.query(Order).filter(Order.id == order_id).first()
-            if order:
-                order.payment_status = "success"
-                db.commit()
-                items_text = "\n".join([f"- {i['qty']}x {i['title']} ({i['size']})" for i in order.product_details])
-                await bot.send_message(
-                    order.vendor_id,
-                    f"🚨 *New Paid Order #{order.id}*\n\n{items_text}\n\n"
-                    f"💰 Amount: ₦{order.vendor_payout:,.2f} (after 5% cut)\n"
-                    f"👤 {order.customer_name}\n📞 {order.customer_phone}\n📍 {order.delivery_address}",
-                    parse_mode="Markdown"
-                )
-    return {"status": "ok"}
+            v_id = int(metadata.
