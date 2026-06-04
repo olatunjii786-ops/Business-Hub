@@ -37,8 +37,8 @@ app.add_middleware(
 # 2. CONFIG FROM RENDER ENV VARS
 DATABASE_URL = os.getenv("DATABASE_URL")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY") # Get from Paystack when ready
-ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0")) # Add this in Render
+PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY")
+ADMIN_TELEGRAM_ID = int(os.getenv("ADMIN_TELEGRAM_ID", "0"))
 RENDER_URL = os.getenv("RENDER_EXTERNAL_URL")
 
 if not DATABASE_URL or not BOT_TOKEN:
@@ -483,4 +483,5 @@ async def paystack_webhook(request: Request, x_paystack_signature: str = Header(
     if event == "charge.success":
         metadata = data.get("metadata", {})
         if metadata.get("type") == "vendor_subscription":
-            v_id = int(metadata.
+            v_id = int(metadata.get("vendor_id"))
+            vendor = db.query(Vend
