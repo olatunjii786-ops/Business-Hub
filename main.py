@@ -1,7 +1,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 from fastapi import FastAPI, Request, Depends, HTTPException
-from sqlalchemy import create_engine, Column, BIGINT, VARCHAR, BOOLEAN, TIMESTAMP, SERIAL, NUMERIC, TEXT, ForeignKey, Integer
+from sqlalchemy import create_engine, Column, BIGINT, VARCHAR, BOOLEAN, TIMESTAMP, NUMERIC, TEXT, ForeignKey, Integer
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from aiogram import Bot, Dispatcher, types
 from aiogram.filters import Command
@@ -20,7 +20,6 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-# Safety fallback: If key isn't found, it defaults to a empty string so it doesn't crash on boot!
 PAYSTACK_SECRET_KEY = os.getenv("PAYSTACK_SECRET_KEY", "placeholder_test_key")
 RENDER_EXTERNAL_URL = os.getenv("RENDER_EXTERNAL_URL") 
 
@@ -34,7 +33,7 @@ def get_db():
     finally:
         db.close()
 
-# 2. DATABASE MODELS
+# 2. DATABASE MODELS (Fully updated to standard SQLAlchemy syntax)
 class Vendor(Base):
     __tablename__ = "vendors"
     vendor_id = Column(BIGINT, primary_key=True)
@@ -48,7 +47,7 @@ class Vendor(Base):
 
 class Product(Base):
     __tablename__ = "products"
-    id = Column(SERIAL, primary_key=True)
+    id = Column(Integer, primary_key=True)
     vendor_id = Column(BIGINT, ForeignKey("vendors.vendor_id"))
     title = Column(VARCHAR(255))
     price = Column(NUMERIC(12, 2))
@@ -59,7 +58,7 @@ class Product(Base):
 
 class Order(Base):
     __tablename__ = "orders"
-    id = Column(SERIAL, primary_key=True)
+    id = Column(Integer, primary_key=True)
     vendor_id = Column(BIGINT, ForeignKey("vendors.vendor_id"))
     customer_name = Column(VARCHAR(255))
     customer_phone = Column(VARCHAR(50))
@@ -71,7 +70,7 @@ class Order(Base):
     payment_status = Column(VARCHAR(50), default='pending')
     created_at = Column(TIMESTAMP(timezone=True), default=lambda: datetime.now(timezone.utc))
 
-# 3. TELEGRAM BOT HANDLERS
+# 3. TELEGRAM BOT HANDLERS (Deep Linking & Commands)
 
 @dp.message(Command("start"))
 async def command_start_handler(message: types.Message):
@@ -80,6 +79,7 @@ async def command_start_handler(message: types.Message):
     db = SessionLocal()
     
     try:
+        # Scenario A: Customer opens a vendor's shared store link
         if len(args) > 1 and args[1].startswith("shop_"):
             store_name = args[1].replace("shop_", "").replace("_", " ")
             vendor = db.query(Vendor).filter(Vendor.business_name.ilike(store_name), Vendor.is_active == True).first()
@@ -93,6 +93,7 @@ async def command_start_handler(message: types.Message):
                 await message.answer("Sorry, this store is currently closed or unavailable.")
             return
 
+        # Scenario B: Vendor opens the bot directly
         vendor = db.query(Vendor).filter(Vendor.vendor_id == user_id).first()
         if vendor:
             status_text = "🟢 Active" if vendor.is_active else "🔴 Inactive / Expired"
@@ -102,6 +103,7 @@ async def command_start_handler(message: types.Message):
             ])
             await message.answer(f"Welcome back, Boss!\nStore Status: {status_text}\n\nUse the dashboard below to manage stock or update clothes.", reply_markup=kb)
         else:
+            # Random user or unregistered vendor signup route
             kb = InlineKeyboardMarkup(inline_keyboard=[[
                 InlineKeyboardButton(text="🚀 Register My Business", web_app=WebAppInfo(url="https://yourfrontend.com/register"))
             ]])
@@ -113,7 +115,6 @@ async def command_start_handler(message: types.Message):
 
 @app.on_event("startup")
 async def on_startup():
-    # Only try to set webhook if RENDER_EXTERNAL_URL is active
     if RENDER_EXTERNAL_URL:
         webhook_url = f"{RENDER_EXTERNAL_URL}/telegram-webhook"
         await bot.set_webhook(url=webhook_url)
@@ -134,16 +135,17 @@ async def paystack_webhook(request: Request, db: Session = Depends(get_db)):
         reference = data.get("reference")
         metadata = data.get("metadata", {})
         
+        # Scenario 1: Subscription payment verification
         if metadata.get("type") == "vendor_subscription":
             v_id = metadata.get("vendor_id")
             vendor = db.query(Vendor).filter(Vendor.vendor_id == v_id).first()
             if vendor:
                 vendor.is_active = True
-                # Cleaned up time math here to prevent crashes
                 vendor.subscription_expiry = datetime.now(timezone.utc) + timedelta(days=30)
                 db.commit()
                 await bot.send_message(chat_id=v_id, text="🎯 Payment Verified! Your Business Hub account has been fully activated for 30 days. You can now share your link!")
                 
+        # Scenario 2: Clothes checkout payment verification
         elif metadata.get("type") == "customer_order":
             order = db.query(Order).filter(Order.paystack_reference == reference).first()
             if order:
@@ -178,4 +180,3 @@ async def master_admin_handler(message: types.Message):
         await message.answer(metrics_dashboard, parse_mode="Markdown")
     finally:
         db.close()
-    
