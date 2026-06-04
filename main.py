@@ -279,8 +279,8 @@ async def healthcheck():
 # === ADMIN WEBAPP ===
 @app.get("/webapp/admin", response_class=HTMLResponse)
 async def admin_webapp(request: Request):
-    return templates.TemplateResponse("admin.html", {"request": request})
-
+    return templates.TemplateResponse(request, "admin.html")
+    
 @app.get("/api/admin/stats")
 async def admin_stats(user = Depends(require_admin), db: Session = Depends(get_db)):
     vendors = db.query(Vendor).all()
