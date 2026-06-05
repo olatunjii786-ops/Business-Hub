@@ -55,7 +55,12 @@ async def get_my_vendor(request: Request, db: Session = Depends(get_db)):
     }
 
 @router.post("/register/{telegram_id}")
-async def register_vendor(telegram_id: int, data: VendorReg, db: Session = Depends(get_db)):
+async def register_vendor(telegram_id: int, data: VendorReg, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user or user['id']!= telegram_id:
+        raise HTTPException(403, "Cannot register for another user")
+    
     logger.info(f"Registration attempt for {telegram_id}: {data.business_name}")
     
     existing = db.query(Vendor).filter(Vendor.vendor_id == telegram_id).first()
@@ -96,6 +101,8 @@ async def register_vendor(telegram_id: int, data: VendorReg, db: Session = Depen
         vendor_id=telegram_id,
         business_name=clean_name,
         phone_number=data.phone_number.strip(),
+        bank_name=data.bank_name,  # NOW SAVING THIS
+        account_number=data.account_number,  # NOW SAVING THIS
         paystack_subaccount=subaccount,
         is_active=True,
         subscription_expiry=datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS),
