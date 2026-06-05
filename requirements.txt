@@ -5,4 +5,3 @@ psycopg2-binary
 httpx
 aiogram==3.10.0
 jinja2
-pydantic-settings
