@@ -15,16 +15,11 @@
             min-height: 100vh;
         }
         .container { padding: 20px; max-width: 700px; margin: 0 auto; }
-        
         .header { margin-bottom: 32px; animation: fadeInDown 0.6s ease; }
         @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
         .header h1 { font-size: 36px; font-weight: 800; letter-spacing: -1px; background: linear-gradient(135deg, #fff, #888); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
         .header p { opacity: 0.5; font-size: 15px; margin-top: 6px; }
-        
-        .stats-grid { 
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; 
-            margin-bottom: 32px;
-        }
+        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; margin-bottom: 32px; }
         .stat-card {
             background: rgba(255,255,255,0.05); backdrop-filter: blur(20px);
             border: 1px solid rgba(255,255,255,0.1); border-radius: 20px;
@@ -37,43 +32,22 @@
         .stat-card:nth-child(3) { animation-delay: 0.3s; }
         .stat-card:nth-child(4) { animation-delay: 0.4s; }
         @keyframes cardSlide { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
-        
-        .stat-card:active { transform: scale(0.96); }
         .stat-card::before {
             content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
             background: linear-gradient(90deg, #10b981, #3b82f6);
             animation: gradientMove 3s linear infinite;
         }
         @keyframes gradientMove { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
-        
         .stat-icon { font-size: 32px; margin-bottom: 12px; opacity: 0.8; }
         .stat-value { font-size: 32px; font-weight: 800; margin-bottom: 4px; }
         .stat-label { font-size: 13px; opacity: 0.6; text-transform: uppercase; letter-spacing: 0.5px; }
-        
-        .section { animation: fadeIn 0.8s ease 0.4s backwards; }
-        .section-title { font-size: 20px; font-weight: 700; margin-bottom: 16px; opacity: 0.9; }
-        
-        .vendor-item {
-            background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08);
-            border-radius: 16px; padding: 16px; margin-bottom: 12px;
-            display: flex; justify-content: space-between; align-items: center;
-            transition: all 0.3s; animation: slideInRight 0.5s ease backwards;
+        .error-box { 
+            background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
+            border-radius: 16px; padding: 20px; text-align: center; margin-top: 20px;
+            display: none; animation: fadeIn 0.3s;
         }
-        .vendor-item:nth-child(1) { animation-delay: 0.5s; }
-        .vendor-item:nth-child(2) { animation-delay: 0.6s; }
-        .vendor-item:nth-child(3) { animation-delay: 0.7s; }
-        @keyframes slideInRight { from { opacity: 0; transform: translateX(30px); } to { opacity: 1; transform: translateX(0); } }
-        
-        .vendor-item:active { background: rgba(255,255,255,0.06); transform: scale(0.98); }
-        .vendor-info strong { font-size: 16px; font-weight: 600; display: block; margin-bottom: 4px; }
-        .vendor-info span { font-size: 13px; opacity: 0.5; }
-        .badge {
-            padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
-            background: rgba(16,185,129,0.2); color: #10b981;
-        }
-        .badge.trial { background: rgba(59,130,246,0.2); color: #3b82f6; }
-        .badge.expired { background: rgba(239,68,68,0.2); color: #ef4444; }
-        
+        .error-box.show { display: block; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
         .loading { text-align: center; padding: 60px 20px; }
         .spinner {
             width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1);
@@ -113,14 +87,14 @@
             </div>
         </div>
         
-        <div class="section">
-            <div class="section-title">Recent Vendors</div>
-            <div id="vendors">
-                <div class="loading">
-                    <div class="spinner"></div>
-                    <div style="opacity: 0.5;">Loading vendors...</div>
-                </div>
-            </div>
+        <div class="error-box" id="error">
+            <div style="font-size: 48px; margin-bottom: 12px;">⚠️</div>
+            <div id="error_msg">Failed to load stats</div>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div style="opacity: 0.5;">Loading vendors...</div>
         </div>
     </div>
 
@@ -130,30 +104,33 @@
     tg.expand();
     tg.setHeaderColor('#0f0f0f');
 
-    async function fetchAPI(url) {
-        const res = await fetch(url, {
-            headers: { 'X-Telegram-Init-Data': tg.initData }
-        });
-        if (!res.ok) throw new Error('Failed');
-        return res.json();
-    }
-
     async function loadStats() {
         try {
-            const stats = await fetchAPI('/api/admin/stats');
+            const res = await fetch('/api/admin/stats', {
+                headers: { 'X-Telegram-Init-Data': tg.initData } // THIS WAS MISSING
+            });
             
-            // Animate numbers counting up
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'Failed to load');
+            }
+            
+            const stats = await res.json();
+            document.getElementById('loading').style.display = 'none';
+            
             animateValue('total_vendors', 0, stats.total_vendors, 800);
             animateValue('active_vendors', 0, stats.active_vendors, 800);
             animateValue('on_trial', 0, stats.on_trial, 800);
             
             const salesEl = document.getElementById('total_sales');
             salesEl.textContent = '₦' + stats.total_sales.toLocaleString();
-            salesEl.style.animation = 'fadeIn 0.6s ease';
-            
             tg.HapticFeedback.notificationOccurred('success');
+            
         } catch (e) {
-            tg.showAlert('Failed to load stats');
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('error').classList.add('show');
+            document.getElementById('error_msg').textContent = e.message;
+            tg.HapticFeedback.notificationOccurred('error');
         }
     }
 
@@ -174,7 +151,6 @@
     }
 
     loadStats();
-    setInterval(loadStats, 30000); // Refresh every 30s
 </script>
 </body>
-                    </html>
+</html>
