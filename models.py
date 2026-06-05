@@ -8,6 +8,8 @@ class Vendor(Base):
     vendor_id = Column(BIGINT, primary_key=True)
     business_name = Column(VARCHAR(255), unique=True, nullable=False)
     phone_number = Column(VARCHAR(20))
+    bank_name = Column(VARCHAR(100))  # MISSING - ADDED
+    account_number = Column(VARCHAR(10))  # MISSING - ADDED
     paystack_subaccount = Column(VARCHAR(255))
     is_active = Column(BOOLEAN, default=False)
     subscription_expiry = Column(TIMESTAMP(timezone=True))
@@ -41,6 +43,6 @@ class Order(Base):
     total_amount = Column(NUMERIC(10, 2))
     commission = Column(NUMERIC(10, 2))
     paystack_reference = Column(VARCHAR(255), unique=True)
-    status = Column(VARCHAR(50), default="pending")
+    status = Column(VARCHAR(50), default="pending")  # MISSING - ADDED
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     vendor = relationship("Vendor", back_populates="orders")
