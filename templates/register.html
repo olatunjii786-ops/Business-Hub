@@ -9,54 +9,110 @@
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', Roboto, sans-serif;
-            background: var(--tg-theme-bg-color, #fff);
-            color: var(--tg-theme-text-color, #000);
+            background: var(--tg-theme-bg-color, #0f0f0f);
+            color: var(--tg-theme-text-color, #fff);
             -webkit-font-smoothing: antialiased;
+            overflow-x: hidden;
         }
-        .container { padding: 24px 20px; max-width: 500px; margin: 0 auto; }
-        .hero { text-align: center; padding: 32px 0 40px 0; }
-        .hero-icon { font-size: 64px; margin-bottom: 16px; }
-        .hero h1 { font-size: 36px; font-weight: 800; letter-spacing: -1px; margin-bottom: 12px; }
-        .hero p { opacity: 0.7; font-size: 17px; line-height: 1.5; }
+        .container { padding: 24px 20px 40px; max-width: 500px; margin: 0 auto; }
+        
+        .hero { text-align: center; padding: 40px 0; position: relative; }
+        .hero-bg {
+            position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+            width: 300px; height: 300px; border-radius: 50%;
+            background: radial-gradient(circle, rgba(16,185,129,0.2) 0%, transparent 70%);
+            animation: pulse 3s ease-in-out infinite;
+            z-index: 0;
+        }
+        @keyframes pulse { 0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.5; } 50% { transform: translateX(-50%) scale(1.1); opacity: 0.8; } }
+        
+        .hero-content { position: relative; z-index: 1; animation: fadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+        
         .badge { 
-            display: inline-block; background: #10b981; color: white; 
-            padding: 6px 14px; border-radius: 20px; font-size: 13px; 
-            font-weight: 700; margin-bottom: 20px;
+            display: inline-block; background: linear-gradient(135deg, #10b981, #059669);
+            color: white; padding: 8px 18px; border-radius: 24px; font-size: 13px; 
+            font-weight: 700; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(16,185,129,0.4);
+            animation: shimmer 2s infinite;
         }
+        @keyframes shimmer { 0%, 100% { box-shadow: 0 4px 20px rgba(16,185,129,0.4); } 50% { box-shadow: 0 4px 30px rgba(16,185,129,0.7); } }
+        
+        .hero-icon { font-size: 72px; margin-bottom: 16px; animation: float 3s ease-in-out infinite; }
+        @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-10px) rotate(5deg); } }
+        
+        .hero h1 { font-size: 38px; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 12px; }
+        .hero p { opacity: 0.7; font-size: 17px; line-height: 1.5; }
+        
+        .form { animation: fadeIn 1s ease 0.3s backwards; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
         .form-group { margin-bottom: 24px; }
-        label { display: block; margin-bottom: 10px; font-weight: 600; font-size: 15px; }
-        input, select { 
-            width: 100%; padding: 16px; border: 2px solid var(--tg-theme-hint-color, #e5e5ea); 
-            border-radius: 14px; font-size: 16px; transition: border 0.2s;
-            background: var(--tg-theme-secondary-bg-color, #fff);
-            color: var(--tg-theme-text-color, #000);
-            -webkit-appearance: none;
+        label { 
+            display: block; margin-bottom: 10px; font-weight: 600; font-size: 15px; 
+            opacity: 0.9; transition: color 0.2s;
         }
+        input, select { 
+            width: 100%; padding: 18px; border: 2px solid rgba(255,255,255,0.1); 
+            border-radius: 16px; font-size: 16px; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+            background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
+            color: var(--tg-theme-text-color, #fff); -webkit-appearance: none;
+        }
+        input::placeholder { color: rgba(255,255,255,0.3); }
         input:focus, select:focus { 
             outline: none; 
-            border-color: var(--tg-theme-button-color, #007aff); 
+            border-color: #10b981;
+            background: rgba(16,185,129,0.1);
+            transform: scale(1.02);
+            box-shadow: 0 0 0 4px rgba(16,185,129,0.1);
         }
-        .footer { text-align: center; font-size: 13px; opacity: 0.5; margin-top: 32px; }
+        select option { background: #1a1a1a; color: #fff; }
+        
+        .error { 
+            color: #ef4444; font-size: 13px; margin-top: 8px; 
+            display: none; animation: shake 0.4s;
+        }
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+        .error.show { display: block; }
+        
+        .footer { text-align: center; font-size: 13px; opacity: 0.4; margin-top: 40px; animation: fadeIn 1s ease 0.6s backwards; }
+        
+        .success-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.9);
+            display: none; align-items: center; justify-content: center;
+            z-index: 1000; animation: fadeIn 0.3s;
+        }
+        .success-overlay.show { display: flex; }
+        .success-box {
+            text-align: center; animation: successPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        @keyframes successPop { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
+        .success-icon { font-size: 80px; margin-bottom: 20px; animation: bounce 0.6s; }
+        @keyframes bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="hero">
-            <div class="badge">7 DAYS FREE</div>
-            <div class="hero-icon">🚀</div>
-            <h1>Launch Your Store</h1>
-            <p>Keep 100% of sales during trial.<br>No card required to start.</p>
+            <div class="hero-bg"></div>
+            <div class="hero-content">
+                <div class="badge">7 DAYS FREE</div>
+                <div class="hero-icon">🚀</div>
+                <h1>Launch Your Store</h1>
+                <p>Keep 100% of sales during trial.<br>No card required to start.</p>
+            </div>
         </div>
 
-        <form id="form">
+        <form class="form" id="form">
             <div class="form-group">
                 <label>Business Name</label>
-                <input type="text" id="business_name" placeholder="e.g. Amara's Fashion Hub" required autocomplete="organization">
+                <input type="text" id="business_name" placeholder="e.g. Amara's Fashion Hub" required maxlength="100" autocomplete="organization">
+                <div class="error" id="name_error"></div>
             </div>
             
             <div class="form-group">
                 <label>WhatsApp Number</label>
                 <input type="tel" id="phone_number" placeholder="08012345678" required autocomplete="tel">
+                <div class="error" id="phone_error"></div>
             </div>
             
             <div class="form-group">
@@ -71,27 +127,48 @@
                     <option value="Kuda Bank">Kuda Bank</option>
                     <option value="Opay">Opay</option>
                     <option value="Palmpay">Palmpay</option>
+                    <option value="Moniepoint">Moniepoint</option>
                 </select>
+                <div class="error" id="bank_error"></div>
             </div>
             
             <div class="form-group">
                 <label>Account Number</label>
                 <input type="text" id="account_number" placeholder="0123456789" required maxlength="10" pattern="[0-9]{10}">
+                <div class="error" id="account_error"></div>
             </div>
         </form>
         
         <div class="footer">By continuing, you agree to our Terms</div>
     </div>
 
+    <div class="success-overlay" id="success">
+        <div class="success-box">
+            <div class="success-icon">🎉</div>
+            <h2 style="font-size: 28px; margin-bottom: 12px;">Store Activated!</h2>
+            <p style="opacity: 0.7;">Your 7-day free trial starts now</p>
+        </div>
+    </div>
+
 <script>
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
-    tg.setHeaderColor('secondary_bg_color');
+    tg.setHeaderColor('#0f0f0f');
     tg.MainButton.setText('START 7-DAY FREE TRIAL').show();
     tg.MainButton.color = '#10b981';
 
+    function showError(field, msg) {
+        const el = document.getElementById(field + '_error');
+        el.textContent = msg;
+        el.classList.add('show');
+        tg.HapticFeedback.notificationOccurred('error');
+        setTimeout(() => el.classList.remove('show'), 3000);
+    }
+
     tg.MainButton.onClick(async () => {
+        document.querySelectorAll('.error').forEach(e => e.classList.remove('show'));
+        
         const data = {
             business_name: document.getElementById('business_name').value.trim(),
             phone_number: document.getElementById('phone_number').value.trim(),
@@ -99,9 +176,21 @@
             account_number: document.getElementById('account_number').value.trim()
         };
         
-        if (!data.business_name || !data.phone_number || !data.bank_name || data.account_number.length !== 10) {
-            tg.HapticFeedback.notificationOccurred('error');
-            tg.showAlert('Please fill all fields correctly');
+        // Validation
+        if (!data.business_name || data.business_name.length < 3) {
+            showError('name', 'Business name must be at least 3 characters');
+            return;
+        }
+        if (!data.phone_number || data.phone_number.length < 10) {
+            showError('phone', 'Enter valid phone number');
+            return;
+        }
+        if (!data.bank_name) {
+            showError('bank', 'Select your bank');
+            return;
+        }
+        if (!data.account_number || data.account_number.length !== 10) {
+            showError('account', 'Account must be 10 digits');
             return;
         }
 
@@ -113,19 +202,25 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(data)
             });
-            if (!res.ok) throw new Error(await res.text());
+            
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'Registration failed');
+            }
+            
             tg.HapticFeedback.notificationOccurred('success');
-            tg.showAlert('🎉 Trial activated! Your store is live for 7 days.', () => tg.close());
+            document.getElementById('success').classList.add('show');
+            setTimeout(() => tg.close(), 2000);
+            
         } catch (e) {
-    tg.HapticFeedback.notificationOccurred('error');
-    const errorText = await e.text?.() || 'Registration failed';
-    try {
-        const errorJson = JSON.parse(errorText);
-        tg.showAlert(errorJson.detail || 'Registration failed');
-    } catch {
-        tg.showAlert('Registration failed. Check your details and try again');
-    }
-}
+            tg.HapticFeedback.notificationOccurred('error');
+            if (e.message.includes('already taken')) {
+                showError('name', 'This name is taken. Try another one');
+            } else if (e.message.includes('Bank')) {
+                showError('account', e.message);
+            } else {
+                tg.showAlert(e.message || 'Registration failed. Try again');
+            }
         } finally {
             tg.MainButton.hideProgress();
             tg.MainButton.enable();
@@ -133,4 +228,4 @@
     });
 </script>
 </body>
-          </html>
+        </html>
