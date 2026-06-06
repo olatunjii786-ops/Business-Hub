@@ -24,7 +24,7 @@ app = FastAPI(title="Business Hub Engine")
 templates = Jinja2Templates(directory="templates")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-bot = Bot(token=8881174347:AAG1KurslwpL0ueXbcxyjvTSIwU75JcJn1s, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
+bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
 # Register all routers - your new endpoints auto-load
