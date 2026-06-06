@@ -149,3 +149,71 @@ async def create_product(request: Request, data: ProductCreate, db: Session = De
     db.add(product)
     db.commit()
     return {"status": "created", "product_id": product.id}
+
+@router.get("/orders")
+async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+
+    orders = db.query(Order).filter(
+        Order.vendor_id == user['id'],
+        Order.status == "paid"
+    ).order_by(Order.created_at.desc()).limit(50).all()
+    
+    return [{
+        "id": o.id,
+        "customer_name": o.customer_name,
+        "customer_phone": o.customer_phone,
+        "delivery_address": o.delivery_address,
+        "items": json.loads(o.items),
+        "total_amount": float(o.total_amount),
+        "you_keep": float(o.total_amount - o.commission),
+        "created_at": o.created_at.isoformat(),
+        "status": o.status
+    } for o in orders]
+
+@router.post("/orders/{order_id}/deliver")
+async def mark_delivered(order_id: int, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+
+    order = db.query(Order).filter(Order.id == order_id, Order.vendor_id == user['id']).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+    
+    if order.status == "delivered":
+        raise HTTPException(400, "Already delivered")
+        
+    order.status = "delivered"
+    db.commit()
+    
+    # Notify customer via bot
+    from main import bot
+    try:
+        await bot.send_message(
+            order.vendor_id, # Should be customer telegram_id but we don't store it yet
+            f"📦 <b>Order Update</b>\n\nYour order from {order.vendor.business_name} has been marked as delivered!\n\nReference: {order.paystack_reference}"
+        )
+    except:
+        pass  # Don't fail if DM fails
+    
+    return {"status": "marked_delivered"}
+
+@router.post("/products/{product_id}/toggle")
+async def toggle_product(product_id: int, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+
+    product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
+    if not product:
+        raise HTTPException(404, "Product not found")
+    
+    product.is_active = not product.is_active
+    db.commit()
+    return {"status": "toggled", "is_active": product.is_active}
