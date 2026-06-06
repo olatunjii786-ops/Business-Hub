@@ -7,9 +7,11 @@ class Vendor(Base):
     __tablename__ = "vendors"
     vendor_id = Column(BIGINT, primary_key=True)
     business_name = Column(VARCHAR(255), unique=True, nullable=False)
+    business_description = Column(TEXT, default="") # NEW
+    logo_file_id = Column(VARCHAR(255)) # NEW - Telegram file_id
     phone_number = Column(VARCHAR(20))
-    bank_name = Column(VARCHAR(100))  # MISSING - ADDED
-    account_number = Column(VARCHAR(10))  # MISSING - ADDED
+    bank_name = Column(VARCHAR(100))
+    account_number = Column(VARCHAR(10))
     paystack_subaccount = Column(VARCHAR(255))
     is_active = Column(BOOLEAN, default=False)
     subscription_expiry = Column(TIMESTAMP(timezone=True))
