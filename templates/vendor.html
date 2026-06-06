@@ -15,7 +15,7 @@
             --glass: rgba(255,255,255,0.06);
             --border: rgba(255,255,255,0.12);
         }
-        body { 
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
             background: #0a0a0a;
             color: #fff;
@@ -37,15 +37,15 @@
             z-index: 0;
         }
         @keyframes bgShift { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(-10%, -10%) rotate(180deg); } }
-        
-        .container { position: relative; z-index: 1; padding: 20px 16px 100px; max-width: 600px; margin: 0 auto; }
-        
-        .header { margin-bottom: 24px; animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
+
+       .container { position: relative; z-index: 1; padding: 20px 16px 100px; max-width: 600px; margin: 0 auto; }
+
+       .header { margin-bottom: 24px; animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
         @keyframes slideDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
-        .greeting { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
-        .subtext { opacity: 0.5; font-size: 15px; }
-        
-        .trial-banner {
+       .greeting { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
+       .subtext { opacity: 0.5; font-size: 15px; }
+
+       .trial-banner {
             background: var(--grad-4);
             border-radius: 20px;
             padding: 18px;
@@ -54,7 +54,7 @@
             overflow: hidden;
             animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s backwards;
         }
-        .trial-banner::before {
+       .trial-banner::before {
             content: '';
             position: absolute;
             top: -50%;
@@ -66,12 +66,12 @@
             animation: float 6s ease-in-out infinite;
         }
         @keyframes float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-20px, 20px); } }
-        .trial-content { position: relative; z-index: 1; }
-        .trial-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-        .trial-days { font-size: 36px; font-weight: 900; }
-        
-        .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
-        .stat-card {
+       .trial-content { position: relative; z-index: 1; }
+       .trial-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
+       .trial-days { font-size: 36px; font-weight: 900; }
+
+       .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
+       .stat-card {
             background: var(--glass);
             backdrop-filter: blur(20px);
             border: 1px solid var(--border);
@@ -82,13 +82,13 @@
             transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
         }
-        .stat-card:nth-child(1) { animation-delay: 0.2s; }
-        .stat-card:nth-child(2) { animation-delay: 0.3s; }
-        .stat-card:nth-child(3) { animation-delay: 0.4s; }
-        .stat-card:nth-child(4) { animation-delay: 0.5s; }
+       .stat-card:nth-child(1) { animation-delay: 0.2s; }
+       .stat-card:nth-child(2) { animation-delay: 0.3s; }
+       .stat-card:nth-child(3) { animation-delay: 0.4s; }
+       .stat-card:nth-child(4) { animation-delay: 0.5s; }
         @keyframes popIn { from { opacity: 0; transform: scale(0.8) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-        .stat-card:active { transform: scale(0.96); }
-        .stat-card::after {
+       .stat-card:active { transform: scale(0.96); }
+       .stat-card::after {
             content: '';
             position: absolute;
             top: 0;
@@ -99,12 +99,12 @@
             transform: scaleX(0);
             transition: transform 0.3s;
         }
-        .stat-card:hover::after { transform: scaleX(1); }
-        .stat-icon { font-size: 28px; margin-bottom: 10px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); }
-        .stat-value { font-size: 28px; font-weight: 900; margin-bottom: 2px; }
-        .stat-label { font-size: 12px; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.5px; }
-        
-        .tabs {
+       .stat-card:hover::after { transform: scaleX(1); }
+       .stat-icon { font-size: 28px; margin-bottom: 10px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); }
+       .stat-value { font-size: 28px; font-weight: 900; margin-bottom: 2px; }
+       .stat-label { font-size: 12px; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.5px; }
+
+       .tabs {
             display: flex;
             gap: 8px;
             margin-bottom: 20px;
@@ -115,7 +115,7 @@
             border-radius: 16px;
             animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s backwards;
         }
-        .tab {
+       .tab {
             flex: 1;
             padding: 12px;
             border: none;
@@ -127,18 +127,18 @@
             cursor: pointer;
             transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
         }
-        .tab.active {
+       .tab.active {
             background: var(--grad-1);
             color: white;
             box-shadow: 0 4px 20px rgba(102,126,234,0.4);
         }
-        .tab:active { transform: scale(0.95); }
-        
-        .section { display: none; }
-        .section.active { display: block; animation: fadeIn 0.4s; }
+       .tab:active { transform: scale(0.95); }
+
+       .section { display: none; }
+       .section.active { display: block; animation: fadeIn 0.4s; }
         @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-        
-        .card {
+
+       .card {
             background: var(--glass);
             backdrop-filter: blur(20px);
             border: 1px solid var(--border);
@@ -149,11 +149,11 @@
             animation: cardSlide 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
         }
         @keyframes cardSlide { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
-        .card:active { transform: scale(0.98); background: rgba(255,255,255,0.08); }
-        .card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 14px; }
-        .card-title { font-weight: 700; font-size: 17px; margin-bottom: 4px; }
-        .card-subtitle { font-size: 13px; opacity: 0.5; }
-        .badge {
+       .card:active { transform: scale(0.98); background: rgba(255,255,255,0.08); }
+       .card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 14px; }
+       .card-title { font-weight: 700; font-size: 17px; margin-bottom: 4px; }
+       .card-subtitle { font-size: 13px; opacity: 0.5; }
+       .badge {
             padding: 6px 12px;
             border-radius: 10px;
             font-size: 11px;
@@ -161,22 +161,22 @@
             text-transform: uppercase;
             letter-spacing: 0.5px;
         }
-        .badge.paid { background: rgba(67,233,123,0.2); color: #43e97b; }
-        .badge.delivered { background: rgba(79,172,254,0.2); color: #4facfe; }
-        .badge.active { background: rgba(67,233,123,0.2); color: #43e97b; }
-        .badge.inactive { background: rgba(245,87,108,0.2); color: #f5576c; }
-        
-        .item-list { margin: 14px 0; }
-        .item-row { 
-            display: flex; 
-            justify-content: space-between; 
-            padding: 10px 0; 
+       .badge.paid { background: rgba(67,233,123,0.2); color: #43e97b; }
+       .badge.delivered { background: rgba(79,172,254,0.2); color: #4facfe; }
+       .badge.active { background: rgba(67,233,123,0.2); color: #43e97b; }
+       .badge.inactive { background: rgba(245,87,108,0.2); color: #f5576c; }
+
+       .item-list { margin: 14px 0; }
+       .item-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
             border-bottom: 1px solid rgba(255,255,255,0.05);
             font-size: 14px;
         }
-        .item-row:last-child { border-bottom: none; }
-        
-        .total-row {
+       .item-row:last-child { border-bottom: none; }
+
+       .total-row {
             display: flex;
             justify-content: space-between;
             padding: 14px 0 0;
@@ -185,9 +185,9 @@
             font-weight: 800;
             font-size: 16px;
         }
-        .total-val { background: var(--grad-4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-        
-        .btn {
+       .total-val { background: var(--grad-4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+       .btn {
             width: 100%;
             padding: 16px;
             border: none;
@@ -200,11 +200,11 @@
             letter-spacing: 0.5px;
             margin-top: 12px;
         }
-        .btn:active { transform: scale(0.96); }
-        .btn-primary { background: var(--grad-4); color: #0a0a0a; box-shadow: 0 4px 20px rgba(67,233,123,0.3); }
-        .btn-ghost { background: var(--glass); color: white; border: 1px solid var(--border); }
-        
-        .fab {
+       .btn:active { transform: scale(0.96); }
+       .btn-primary { background: var(--grad-4); color: #0a0a0a; box-shadow: 0 4px 20px rgba(67,233,123,0.3); }
+       .btn-ghost { background: var(--glass); color: white; border: 1px solid var(--border); }
+
+       .fab {
             position: fixed;
             bottom: 24px;
             right: 24px;
@@ -222,19 +222,19 @@
             animation: fabIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.8s backwards;
         }
         @keyframes fabIn { from { opacity: 0; transform: scale(0) rotate(-180deg); } to { opacity: 1; transform: scale(1) rotate(0deg); } }
-        .fab:active { transform: scale(0.9) rotate(90deg); }
-        
-        .empty {
+       .fab:active { transform: scale(0.9) rotate(90deg); }
+
+       .empty {
             text-align: center;
             padding: 80px 20px;
             animation: fadeIn 0.5s;
         }
-        .empty-icon { font-size: 80px; margin-bottom: 20px; animation: bounce 2s ease-in-out infinite; }
+       .empty-icon { font-size: 80px; margin-bottom: 20px; animation: bounce 2s ease-in-out infinite; }
         @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
-        .empty-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-        .empty-text { opacity: 0.5; font-size: 15px; }
-        
-        .stock-indicator {
+       .empty-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
+       .empty-text { opacity: 0.5; font-size: 15px; }
+
+       .stock-indicator {
             display: inline-flex;
             align-items: center;
             gap: 6px;
@@ -243,11 +243,29 @@
             font-size: 12px;
             font-weight: 700;
         }
-        .stock-indicator.good { background: rgba(67,233,123,0.15); color: #43e97b; }
-        .stock-indicator.low { background: rgba(250,204,21,0.15); color: #facc15; }
-        .stock-indicator.out { background: rgba(245,87,108,0.15); color: #f5576c; }
-        .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s ease-in-out infinite; }
+       .stock-indicator.good { background: rgba(67,233,123,0.15); color: #43e97b; }
+       .stock-indicator.low { background: rgba(250,204,21,0.15); color: #facc15; }
+       .stock-indicator.out { background: rgba(245,87,108,0.15); color: #f5576c; }
+       .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s ease-in-out infinite; }
         @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+       .product-img-box {
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            background: rgba(255,255,255,0.05);
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+       .product-img-box img { width: 100%; height: 100%; object-fit: cover; }
+       .product-img-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            font-size: 32px;
+            opacity: 0.3;
+        }
     </style>
 </head>
 <body>
@@ -326,10 +344,10 @@
     tg.ready();
     tg.expand();
     tg.setHeaderColor('#0a0a0a');
-    
-    let vendorData = {};
 
-    // Make functions global so onclick works
+    let vendorData = {};
+    const BOT_TOKEN = "BOT_TOKEN"; // Replaced by main.py
+
     window.switchTab = function(tab) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
@@ -371,14 +389,14 @@
             });
             if (!res.ok) throw new Error('Failed to load vendor');
             vendorData = await res.json();
-            
+
             document.getElementById('greeting').textContent = `Hey ${vendorData.business_name.split(' ')[0]} 👋`;
             document.getElementById('days_left').textContent = vendorData.days_left;
-            
+
             if (!vendorData.on_trial || vendorData.days_left <= 0) {
                 document.getElementById('trial_banner').style.display = 'none';
             }
-            
+
             loadOrders();
         } catch (e) {
             tg.showAlert('Failed to load dashboard: ' + e.message);
@@ -393,17 +411,17 @@
             const orders = await res.json();
             const list = document.getElementById('orders_list');
             const empty = document.getElementById('orders_empty');
-            
+
             document.getElementById('stat_orders').textContent = orders.length;
             document.getElementById('stat_revenue').textContent = '₦' + orders.reduce((s,o) => s + o.you_keep, 0).toLocaleString();
-            
+
             if (orders.length === 0) {
                 list.innerHTML = '';
                 empty.style.display = 'block';
                 return;
             }
             empty.style.display = 'none';
-            
+
             list.innerHTML = orders.map((o, i) => `
                 <div class="card" style="animation-delay: ${i * 0.05}s">
                     <div class="card-header">
@@ -423,7 +441,7 @@
                         <span>You Keep:</span>
                         <span class="total-val">₦${o.you_keep.toLocaleString()}</span>
                     </div>
-                    ${o.status === 'paid' ? `<button class="btn btn-primary" onclick="markDelivered(${o.id})">Mark as Delivered</button>` : ''}
+                    ${o.status === 'paid'? `<button class="btn btn-primary" onclick="markDelivered(${o.id})">Mark as Delivered</button>` : ''}
                 </div>
             `).join('');
         } catch (e) {
@@ -439,30 +457,40 @@
             const products = await res.json();
             const list = document.getElementById('products_list');
             const empty = document.getElementById('products_empty');
-            
+
             document.getElementById('stat_products').textContent = products.length;
-            
+
             if (products.length === 0) {
                 list.innerHTML = '';
                 empty.style.display = 'block';
                 return;
             }
             empty.style.display = 'none';
-            
+
             list.innerHTML = products.map((p, i) => `
                 <div class="card" style="animation-delay: ${i * 0.05}s">
-                    <div class="card-header">
-                        <div>
-                            <div class="card-title">${p.title}</div>
-                            <div style="font-size: 24px; font-weight: 900; margin: 8px 0;">₦${p.price.toLocaleString()}</div>
+                    <div style="display: flex; gap: 14px;">
+                        <div class="product-img-box">
+                            ${p.telegram_file_id?
+                                `<img src="https://api.telegram.org/file/bot${BOT_TOKEN}/${p.telegram_file_id}" alt="${p.title}">` :
+                                `<div class="product-img-placeholder">📦</div>`
+                            }
                         </div>
-                        <div class="badge ${p.is_active ? 'active' : 'inactive'}">${p.is_active ? 'LIVE' : 'HIDDEN'}</div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div class="card-header" style="margin-bottom: 8px;">
+                                <div>
+                                    <div class="card-title" style="font-size: 16px; margin-bottom: 4px;">${p.title}</div>
+                                    <div style="font-size: 20px; font-weight: 900;">₦${p.price.toLocaleString()}</div>
+                                </div>
+                                <div class="badge ${p.is_active? 'active' : 'inactive'}">${p.is_active? 'LIVE' : 'HIDDEN'}</div>
+                            </div>
+                            <div class="stock-indicator ${p.quantity === 0? 'out' : p.quantity < 5? 'low' : 'good'}">
+                                <div class="dot"></div>
+                                ${p.quantity === 0? 'Out of stock' : `${p.quantity} left`}
+                            </div>
+                        </div>
                     </div>
-                    <div class="stock-indicator ${p.quantity === 0 ? 'out' : p.quantity < 5 ? 'low' : 'good'}">
-                        <div class="dot"></div>
-                        ${p.quantity === 0 ? 'Out of stock' : p.quantity < 5 ? `Low: ${p.quantity} left` : `${p.quantity} in stock`}
-                    </div>
-                    <button class="btn btn-ghost" onclick="toggleProduct(${p.id})">${p.is_active ? 'Hide from Store' : 'Show in Store'}</button>
+                    <button class="btn btn-ghost" onclick="toggleProduct(${p.id})">${p.is_active? 'Hide from Store' : 'Show in Store'}</button>
                 </div>
             `).join('');
         } catch (e) {
@@ -474,7 +502,6 @@
         document.getElementById('stat_views').textContent = Math.floor(Math.random() * 500);
     }
 
-    // Event listeners instead of inline onclick
     document.addEventListener('DOMContentLoaded', () => {
         document.querySelectorAll('.tab').forEach(tab => {
             tab.addEventListener('click', () => window.switchTab(tab.dataset.tab));
