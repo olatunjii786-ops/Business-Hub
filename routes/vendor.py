@@ -2,11 +2,13 @@ from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
+from typing import Optional
+import json
 import httpx
 import logging
 from pydantic import BaseModel
 from database import get_db
-from models import Vendor, Product
+from models import Vendor, Product, Order
 from utils import validate_init_data
 from config import PAYSTACK_SECRET_KEY, ENABLE_PAYSTACK, TRIAL_DAYS
 
@@ -15,9 +17,11 @@ logger = logging.getLogger(__name__)
 
 class VendorReg(BaseModel):
     business_name: str
+    business_description: Optional[str] = ""
     phone_number: str
     bank_name: str
     account_number: str
+    logo_file_id: Optional[str] = None
 
 class ProductCreate(BaseModel):
     file_id: str
@@ -28,7 +32,7 @@ class ProductCreate(BaseModel):
     sizes: str
 
 @router.get("/me")
-async def get_my_vendor(request: Request, db: Session = Depends(get_db)):
+async def get_vendor_me(request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
     if not init_data:
         raise HTTPException(403, "Missing auth")
@@ -41,40 +45,19 @@ async def get_my_vendor(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(404, "Not registered")
 
     now = datetime.now(timezone.utc)
-    on_trial = vendor.commission_waived and vendor.subscription_expiry > now
-    days_left = max(0, (vendor.subscription_expiry - now).days) if vendor.subscription_expiry > now else 0
+    on_trial = vendor.commission_waived and vendor.subscription_expiry and vendor.subscription_expiry > now
+    days_left = max(0, (vendor.subscription_expiry - now).days) if vendor.subscription_expiry and vendor.subscription_expiry > now else 0
 
     return {
         "vendor_id": vendor.vendor_id,
         "business_name": vendor.business_name,
+        "business_description": vendor.business_description or "",
+        "logo_file_id": vendor.logo_file_id,
         "is_active": vendor.is_active,
         "subscription_expiry": vendor.subscription_expiry.isoformat() if vendor.subscription_expiry else None,
         "days_left": days_left,
         "on_trial": on_trial,
         "has_subaccount": bool(vendor.paystack_subaccount)
-    }
-
-@router.get("/me")
-async def get_vendor_me(request: Request, db: Session = Depends(get_db)):
-    init_data = request.headers.get("X-Telegram-Init-Data")
-    user = validate_init_data(init_data)
-    if not user:
-        raise HTTPException(403, "Invalid auth")
-    
-    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
-    if not vendor:
-        raise HTTPException(404, "Vendor not found")
-    
-    now = datetime.now(timezone.utc)
-    days_left = 0
-    if vendor.subscription_expiry:
-        days_left = max(0, (vendor.subscription_expiry - now).days)
-    
-    return {
-        "business_name": vendor.business_name,
-        "on_trial": vendor.commission_waived and days_left > 0,
-        "days_left": days_left,
-        "is_active": vendor.is_active
     }
 
 @router.post("/register/{telegram_id}")
@@ -123,9 +106,11 @@ async def register_vendor(telegram_id: int, data: VendorReg, request: Request, d
     vendor = Vendor(
         vendor_id=telegram_id,
         business_name=clean_name,
+        business_description=data.business_description.strip()[:500],
+        logo_file_id=data.logo_file_id,
         phone_number=data.phone_number.strip(),
-        bank_name=data.bank_name,  # NOW SAVING THIS
-        account_number=data.account_number,  # NOW SAVING THIS
+        bank_name=data.bank_name,
+        account_number=data.account_number,
         paystack_subaccount=subaccount,
         is_active=True,
         subscription_expiry=datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS),
@@ -147,7 +132,15 @@ async def get_my_products(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(403, "Invalid auth")
 
     products = db.query(Product).filter(Product.vendor_id == user['id'], Product.is_deleted == False).order_by(Product.created_at.desc()).all()
-    return [{"id": p.id, "title": p.title, "price": float(p.price), "quantity": p.quantity, "is_active": p.is_active} for p in products]
+    return [{
+        "id": p.id,
+        "title": p.title,
+        "description": p.description,
+        "price": float(p.price),
+        "quantity": p.quantity,
+        "is_active": p.is_active,
+        "telegram_file_id": p.telegram_file_id
+    } for p in products]
 
 @router.post("/products/create")
 async def create_product(request: Request, data: ProductCreate, db: Session = Depends(get_db)):
@@ -173,6 +166,21 @@ async def create_product(request: Request, data: ProductCreate, db: Session = De
     db.commit()
     return {"status": "created", "product_id": product.id}
 
+@router.post("/products/{product_id}/toggle")
+async def toggle_product(product_id: int, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+
+    product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
+    if not product:
+        raise HTTPException(404, "Product not found")
+    
+    product.is_active = not product.is_active
+    db.commit()
+    return {"status": "toggled", "is_active": product.is_active}
+
 @router.get("/orders")
 async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
@@ -182,7 +190,7 @@ async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
 
     orders = db.query(Order).filter(
         Order.vendor_id == user['id'],
-        Order.status == "paid"
+        Order.status.in_(["paid", "delivered"])
     ).order_by(Order.created_at.desc()).limit(50).all()
     
     return [{
@@ -214,29 +222,34 @@ async def mark_delivered(order_id: int, request: Request, db: Session = Depends(
     order.status = "delivered"
     db.commit()
     
-    # Notify customer via bot
-    from main import bot
-    try:
-        await bot.send_message(
-            order.vendor_id, # Should be customer telegram_id but we don't store it yet
-            f"📦 <b>Order Update</b>\n\nYour order from {order.vendor.business_name} has been marked as delivered!\n\nReference: {order.paystack_reference}"
-        )
-    except:
-        pass  # Don't fail if DM fails
-    
     return {"status": "marked_delivered"}
 
-@router.post("/products/{product_id}/toggle")
-async def toggle_product(product_id: int, request: Request, db: Session = Depends(get_db)):
-    init_data = request.headers.get("X-Telegram-Init-Data")
-    user = validate_init_data(init_data)
-    if not user:
-        raise HTTPException(403, "Invalid auth")
+# PUBLIC ENDPOINTS FOR CUSTOMER MARKETPLACE
+@router.get("/public/vendors")
+async def get_public_vendors(db: Session = Depends(get_db)):
+    vendors = db.query(Vendor).filter(Vendor.is_active == True).all()
+    return [{
+        "vendor_id": v.vendor_id,
+        "business_name": v.business_name,
+        "business_description": v.business_description or "",
+        "logo_file_id": v.logo_file_id,
+        "product_count": db.query(Product).filter(Product.vendor_id == v.vendor_id, Product.is_active == True, Product.is_deleted == False).count()
+    } for v in vendors]
 
-    product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
-    if not product:
-        raise HTTPException(404, "Product not found")
+@router.get("/public/products")
+async def get_public_products(vendor_id: Optional[int] = None, db: Session = Depends(get_db)):
+    query = db.query(Product).filter(Product.is_active == True, Product.quantity > 0, Product.is_deleted == False)
+    if vendor_id:
+        query = query.filter(Product.vendor_id == vendor_id)
     
-    product.is_active = not product.is_active
-    db.commit()
-    return {"status": "toggled", "is_active": product.is_active}
+    products = query.order_by(Product.created_at.desc()).limit(100).all()
+    return [{
+        "id": p.id,
+        "vendor_id": p.vendor_id,
+        "vendor_name": p.vendor.business_name,
+        "title": p.title,
+        "description": p.description,
+        "price": float(p.price),
+        "quantity": p.quantity,
+        "telegram_file_id": p.telegram_file_id
+    } for p in products]
