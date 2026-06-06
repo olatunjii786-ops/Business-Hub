@@ -45,6 +45,28 @@
       .greeting { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
       .subtext { opacity: 0.5; font-size: 15px; }
 
+      .store-link-card {
+            background: var(--grad-1);
+            border-radius: 20px;
+            padding: 18px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+            animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s backwards;
+        }
+      .store-link-card::before {
+            content: '';
+            position: absolute;
+            top: -30%;
+            right: -10%;
+            width: 150px;
+            height: 150px;
+            background: rgba(255,255,255,0.15);
+            border-radius: 50%;
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-15px, 15px); } }
+
       .trial-banner {
             background: var(--grad-4);
             border-radius: 20px;
@@ -65,7 +87,6 @@
             border-radius: 50%;
             animation: float 6s ease-in-out infinite;
         }
-        @keyframes float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-20px, 20px); } }
       .trial-content { position: relative; z-index: 1; }
       .trial-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
       .trial-days { font-size: 36px; font-weight: 900; }
@@ -275,6 +296,19 @@
             <div class="subtext">Here's your store today</div>
         </div>
 
+        <div class="store-link-card">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; position: relative; z-index: 1;">
+                <div>
+                    <div style="font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; margin-bottom: 4px;">Your Store Link</div>
+                    <div style="font-size: 16px; font-weight: 800; word-break: break-all;" id="store_link_text">Loading...</div>
+                </div>
+                <div style="font-size: 32px;">🔗</div>
+            </div>
+            <button class="btn" style="background: rgba(255,255,255,0.2); color: white; margin: 0; position: relative; z-index: 1;" onclick="shareStore()">
+                Share Store Link
+            </button>
+        </div>
+
         <div class="trial-banner" id="trial_banner">
             <div class="trial-content">
                 <div class="trial-title">Trial Period</div>
@@ -346,6 +380,25 @@
     tg.setHeaderColor('#0a0a0a');
 
     let vendorData = {};
+    const BOT_USERNAME = "isaacbusinessbot";
+
+    window.shareStore = function() {
+        const storeSlug = vendorData.business_name.replace(/\s+/g, '_').toLowerCase();
+        const link = `https://t.me/${BOT_USERNAME}?start=shop_${storeSlug}`;
+        tg.HapticFeedback.notificationOccurred('success');
+        
+        if (navigator.share) {
+            navigator.share({
+                title: vendorData.business_name,
+                text: `Check out my store on Business Hub!`,
+                url: link
+            }).catch(() => {
+                tg.showAlert(`Copy this link:\n\n${link}`);
+            });
+        } else {
+            tg.showAlert(`Copy this link:\n\n${link}`);
+        }
+    }
 
     window.switchTab = function(tab) {
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -391,6 +444,10 @@
 
             document.getElementById('greeting').textContent = `Hey ${vendorData.business_name.split(' ')[0]} 👋`;
             document.getElementById('days_left').textContent = vendorData.days_left;
+            
+            // Set store link
+            const storeSlug = vendorData.business_name.replace(/\s+/g, '_').toLowerCase();
+            document.getElementById('store_link_text').textContent = `t.me/${BOT_USERNAME}?start=shop_${storeSlug}`;
 
             if (!vendorData.on_trial || vendorData.days_left <= 0) {
                 document.getElementById('trial_banner').style.display = 'none';
