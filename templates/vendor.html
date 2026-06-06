@@ -3,92 +3,102 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Dashboard</title>
+    <title>Vendor Dashboard</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        :root {
-            --radius: 16px;
-            --shadow: 0 4px 20px rgba(0,0,0,0.08);
-        }
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', Roboto, sans-serif;
-            background: var(--tg-theme-bg-color, #f5f5f5);
-            color: var(--tg-theme-text-color, #000);
-            padding: 0 20px 0;
+            background: var(--tg-theme-bg-color, #0f0f0f);
+            color: var(--tg-theme-text-color, #fff);
             -webkit-font-smoothing: antialiased;
         }
-        .container { padding: 16px; max-width: 600px; margin: 0 auto; }
-        .header { margin: 8px 0 20px 0; }
-        .header h1 { font-size: 32px; font-weight: 800; letter-spacing: -0.5px; }
-        .header p { opacity: 0.6; font-size: 15px; margin-top: 4px; }
-        
-        .banner { 
-            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-            color: white; padding: 24px; border-radius: var(--radius); 
-            margin-bottom: 20px; box-shadow: var(--shadow);
+        .container { padding: 20px; max-width: 700px; margin: 0 auto; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 24px; background: rgba(255,255,255,0.05); padding: 6px; border-radius: 16px; }
+        .tab { 
+            flex: 1; padding: 12px; border: none; background: transparent; color: rgba(255,255,255,0.6);
+            border-radius: 12px; font-weight: 600; font-size: 15px; cursor: pointer; transition: all 0.3s;
         }
-        .banner.expired { background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); }
-        .banner.warning { background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%); }
-        .banner h2 { font-size: 22px; font-weight: 700; margin-bottom: 6px; }
-        .banner p { opacity: 0.95; font-size: 14px; line-height: 1.4; }
-        
-        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 24px; }
+        .tab.active { background: #10b981; color: white; }
+        .section { display: none; animation: fadeIn 0.3s; }
+        .section.active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 24px; }
+        .stat { background: rgba(255,255,255,0.05); padding: 16px; border-radius: 16px; text-align: center; }
+        .stat-val { font-size: 24px; font-weight: 800; margin-bottom: 4px; }
+        .stat-lbl { font-size: 12px; opacity: 0.6; text-transform: uppercase; }
+        .card { 
+            background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 16px; padding: 16px; margin-bottom: 12px;
+        }
+        .card-head { display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px; }
+        .card-title { font-weight: 700; font-size: 16px; margin-bottom: 4px; }
+        .card-sub { font-size: 13px; opacity: 0.6; }
+        .badge { padding: 4px 10px; border-radius: 8px; font-size: 11px; font-weight: 700; text-transform: uppercase; }
+        .badge.paid { background: rgba(16,185,129,0.2); color: #10b981; }
+        .badge.delivered { background: rgba(59,130,246,0.2); color: #3b82f6; }
+        .badge.off { background: rgba(239,68,68,0.2); color: #ef4444; }
+        .badge.on { background: rgba(16,185,129,0.2); color: #10b981; }
+        .items { font-size: 14px; margin: 12px 0; }
+        .item { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.05); }
         .btn { 
-            background: var(--tg-theme-button-color, #007aff); 
-            color: var(--tg-theme-button-text-color, #fff);
-            border: none; border-radius: 14px; padding: 16px; 
-            font-size: 15px; font-weight: 600; cursor: pointer;
-            transition: transform 0.1s; display: flex; align-items: center; justify-content: center; gap: 8px;
+            width: 100%; padding: 14px; border: none; border-radius: 12px; font-weight: 700;
+            font-size: 15px; cursor: pointer; transition: all 0.2s; margin-top: 8px;
         }
-        .btn:active { transform: scale(0.96); }
-        .btn-secondary { 
-            background: var(--tg-theme-secondary-bg-color, #e5e5ea);
-            color: var(--tg-theme-text-color, #000);
-        }
-        
-        .section-title { font-size: 20px; font-weight: 700; margin: 32px 0 16px 0; }
-        .product { 
-            background: var(--tg-theme-secondary-bg-color, #fff);
-            padding: 16px; border-radius: var(--radius); margin-bottom: 10px;
-            display: flex; justify-content: space-between; align-items: center;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.04);
-        }
-        .product-info strong { font-size: 16px; font-weight: 600; }
-        .product-info span { opacity: 0.6; font-size: 13px; display: block; margin-top: 4px; }
-        .status-dot { width: 8px; height: 8px; border-radius: 50%; background: #10b981; }
-        .status-dot.off { background: #9ca3af; }
-        
-        .empty { text-align: center; padding: 60px 20px; opacity: 0.5; }
-        .empty-icon { font-size: 48px; margin-bottom: 12px; }
-        .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: loading 1.5s infinite; border-radius: 8px; }
-        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
+        .btn-primary { background: #10b981; color: white; }
+        .btn-primary:active { transform: scale(0.98); }
+        .btn-ghost { background: rgba(255,255,255,0.1); color: white; }
+        .empty { text-align: center; padding: 60px 20px; opacity: 0.4; }
+        .empty-icon { font-size: 64px; margin-bottom: 16px; }
+        .stock { font-size: 13px; opacity: 0.7; }
+        .stock.low { color: #f59e0b; }
+        .stock.out { color: #ef4444; }
     </style>
 </head>
 <body>
     <div class="container">
-        <div class="header">
-            <h1 id="storeName">Dashboard</h1>
-            <p>Manage your store</p>
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('orders')">Orders</button>
+            <button class="tab" onclick="switchTab('products')">Products</button>
+            <button class="tab" onclick="switchTab('stats')">Stats</button>
         </div>
-        
-        <div id="banner" class="banner">
-            <div class="skeleton" style="height: 24px; width: 60%; margin-bottom: 8px;"></div>
-            <div class="skeleton" style="height: 16px; width: 80%;"></div>
+
+        <!-- ORDERS -->
+        <div class="section active" id="orders">
+            <div id="orders_list"></div>
+            <div class="empty" id="orders_empty" style="display:none;">
+                <div class="empty-icon">📦</div>
+                <div>No orders yet</div>
+                <div style="font-size: 13px; margin-top: 8px;">Share your store link to start selling</div>
+            </div>
         </div>
-        
-        <div class="grid">
-            <button class="btn" onclick="addProduct()">
-                <span>➕</span> Add Product
-            </button>
-            <button class="btn btn-secondary" onclick="getShopLink()">
-                <span>🔗</span> Share Link
-            </button>
+
+        <!-- PRODUCTS -->
+        <div class="section" id="products">
+            <div id="products_list"></div>
+            <div class="empty" id="products_empty" style="display:none;">
+                <div class="empty-icon">📸</div>
+                <div>No products yet</div>
+                <div style="font-size: 13px; margin-top: 8px;">Send me a photo to add your first product</div>
+            </div>
         </div>
-        
-        <div class="section-title">Products</div>
-        <div id="products">
-            <div class="product"><div class="skeleton" style="height: 20px; width: 70%;"></div></div>
+
+        <!-- STATS -->
+        <div class="section" id="stats">
+            <div class="stats">
+                <div class="stat">
+                    <div class="stat-val" id="stat_sales">₦0</div>
+                    <div class="stat-lbl">Total Sales</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-val" id="stat_orders">0</div>
+                    <div class="stat-lbl">Orders</div>
+                </div>
+                <div class="stat">
+                    <div class="stat-val" id="stat_products">0</div>
+                    <div class="stat-lbl">Products</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -96,103 +106,125 @@
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
-    tg.setHeaderColor('secondary_bg_color');
-    let vendorData = null;
+    tg.setHeaderColor('#0f0f0f');
 
-    async function api(url, options = {}) {
-        const res = await fetch(url, {
-           ...options,
-            headers: { 
-                'X-Telegram-Init-Data': tg.initData,
-                'Content-Type': 'application/json',
-               ...options.headers 
-            }
-        });
-        if (!res.ok) throw new Error('Request failed');
-        return res.json();
+    let currentTab = 'orders';
+
+    function switchTab(tab) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        event.target.classList.add('active');
+        document.getElementById(tab).classList.add('active');
+        currentTab = tab;
+        if (tab === 'orders') loadOrders();
+        if (tab === 'products') loadProducts();
+        if (tab === 'stats') loadStats();
     }
 
-    async function init() {
-        try {
-            vendorData = await api('/api/vendor/me');
-            document.getElementById('storeName').textContent = vendorData.business_name;
-            const banner = document.getElementById('banner');
-            
-            if (vendorData.on_trial) {
-                banner.innerHTML = `<h2>🎉 7-Day Free Trial</h2><p>You keep 100% of all sales for ${vendorData.days_left} more days. No commission.</p>`;
-            } else if (vendorData.is_active && vendorData.days_left > 5) {
-                banner.innerHTML = `<h2>🟢 Store Active</h2><p>${vendorData.days_left} days remaining. You keep 95% per sale.</p>`;
-            } else if (vendorData.is_active) {
-                banner.classList.add('warning');
-                banner.innerHTML = `<h2>⚠️ Expiring Soon</h2><p>Only ${vendorData.days_left} days left. Renew to avoid downtime.</p>`;
-                tg.MainButton.setText('Renew ₦3,000').show().onClick(renew);
-            } else {
-                banner.classList.add('expired');
-                banner.innerHTML = `<h2>🔴 Store Paused</h2><p>Renew subscription to start selling again</p>`;
-                tg.MainButton.setText('Renew ₦3,000').show().onClick(renew);
-            }
-            loadProducts();
-        } catch (e) {
-            document.getElementById('banner').innerHTML = '<h2>Not Registered</h2><p>Open /start in bot to register first</p>';
+    async function loadOrders() {
+        const res = await fetch('/api/vendor/orders', {
+            headers: { 'X-Telegram-Init-Data': tg.initData }
+        });
+        const orders = await res.json();
+        const list = document.getElementById('orders_list');
+        const empty = document.getElementById('orders_empty');
+        
+        if (orders.length === 0) {
+            list.innerHTML = '';
+            empty.style.display = 'block';
+            return;
+        }
+        empty.style.display = 'none';
+        
+        list.innerHTML = orders.map(o => `
+            <div class="card">
+                <div class="card-head">
+                    <div>
+                        <div class="card-title">${o.customer_name}</div>
+                        <div class="card-sub">${o.customer_phone} • ${new Date(o.created_at).toLocaleDateString()}</div>
+                    </div>
+                    <div class="badge ${o.status}">${o.status}</div>
+                </div>
+                <div class="items">
+                    ${o.items.map(i => `<div class="item"><span>${i.quantity}x ${i.title}</span><span>₦${(i.price * i.quantity).toLocaleString()}</span></div>`).join('')}
+                </div>
+                <div class="card-sub" style="margin: 12px 0;">📍 ${o.delivery_address}</div>
+                <div style="display: flex; justify-content: space-between; font-weight: 700; margin: 12px 0;">
+                    <span>You Keep:</span>
+                    <span style="color: #10b981;">₦${o.you_keep.toLocaleString()}</span>
+                </div>
+                ${o.status === 'paid' ? `<button class="btn btn-primary" onclick="markDelivered(${o.id})">Mark as Delivered</button>` : ''}
+            </div>
+        `).join('');
+    }
+
+    async function markDelivered(id) {
+        tg.HapticFeedback.impactOccurred('medium');
+        const res = await fetch(`/api/vendor/orders/${id}/deliver`, {
+            method: 'POST',
+            headers: { 'X-Telegram-Init-Data': tg.initData }
+        });
+        if (res.ok) {
+            tg.HapticFeedback.notificationOccurred('success');
+            loadOrders();
         }
     }
 
     async function loadProducts() {
-        try {
-            const products = await api('/api/vendor/products');
-            if (products.length === 0) {
-                document.getElementById('products').innerHTML = `
-                    <div class="empty">
-                        <div class="empty-icon">📦</div>
-                        <strong>No products yet</strong><br>
-                        <span style="font-size: 14px; opacity: 0.6;">Add your first product to start selling</span>
-                    </div>`;
-                return;
-            }
-            document.getElementById('products').innerHTML = products.map(p => `
-                <div class="product">
-                    <div class="product-info">
-                        <strong>${p.title}</strong>
-                        <span>₦${p.price.toLocaleString()} • ${p.quantity} in stock</span>
+        const res = await fetch('/api/vendor/products', {
+            headers: { 'X-Telegram-Init-Data': tg.initData }
+        });
+        const products = await res.json();
+        const list = document.getElementById('products_list');
+        const empty = document.getElementById('products_empty');
+        
+        if (products.length === 0) {
+            list.innerHTML = '';
+            empty.style.display = 'block';
+            return;
+        }
+        empty.style.display = 'none';
+        
+        list.innerHTML = products.map(p => `
+            <div class="card">
+                <div class="card-head">
+                    <div>
+                        <div class="card-title">${p.title}</div>
+                        <div class="stock ${p.quantity === 0 ? 'out' : p.quantity < 5 ? 'low' : ''}">
+                            Stock: ${p.quantity} ${p.quantity === 0 ? '• Out of stock' : p.quantity < 5 ? '• Low' : ''}
+                        </div>
                     </div>
-                    <div class="status-dot ${p.is_active ? '' : 'off'}"></div>
+                    <div class="badge ${p.is_active ? 'on' : 'off'}">${p.is_active ? 'ON' : 'OFF'}</div>
                 </div>
-            `).join('');
-        } catch (e) {
-            document.getElementById('products').innerHTML = '<div class="empty">Failed to load</div>';
-        }
+                <div style="font-size: 20px; font-weight: 800; margin: 12px 0;">₦${p.price.toLocaleString()}</div>
+                <button class="btn btn-ghost" onclick="toggleProduct(${p.id})">${p.is_active ? 'Disable' : 'Enable'} Product</button>
+            </div>
+        `).join('');
     }
 
-    function addProduct() {
-        tg.showAlert('Product upload coming next: Send photos to bot → auto-adds to catalog');
+    async function toggleProduct(id) {
+        tg.HapticFeedback.impactOccurred('light');
+        await fetch(`/api/vendor/products/${id}/toggle`, {
+            method: 'POST',
+            headers: { 'X-Telegram-Init-Data': tg.initData }
+        });
+        loadProducts();
     }
 
-    async function getShopLink() {
-        if (!vendorData) return;
-        const botInfo = await tg.requestContact; // placeholder
-        const slug = vendorData.business_name.toLowerCase().replace(/ /g, '_');
-        const link = `https://t.me/BusinessHubBot?start=shop_${slug}`; // Replace with your bot username
-        tg.HapticFeedback.notificationOccurred('success');
-        tg.showPopup({
-            title: 'Your Shop Link',
-            message: link,
-            buttons: [{type: 'default', text: 'Copy', id: 'copy'}, {type: 'cancel'}]
-        }, (id) => { if(id === 'copy') navigator.clipboard.writeText(link); });
+    async function loadStats() {
+        const [ordersRes, productsRes] = await Promise.all([
+            fetch('/api/vendor/orders', { headers: { 'X-Telegram-Init-Data': tg.initData } }),
+            fetch('/api/vendor/products', { headers: { 'X-Telegram-Init-Data': tg.initData } })
+        ]);
+        const orders = await ordersRes.json();
+        const products = await productsRes.json();
+        const totalSales = orders.reduce((sum, o) => sum + o.you_keep, 0);
+        document.getElementById('stat_sales').textContent = '₦' + totalSales.toLocaleString();
+        document.getElementById('stat_orders').textContent = orders.length;
+        document.getElementById('stat_products').textContent = products.length;
     }
 
-    async function renew() {
-        tg.MainButton.showProgress();
-        try {
-            const res = await api(`/api/vendor/subscribe/${vendorData.vendor_id}`, { method: 'POST' });
-            tg.openLink(res.authorization_url);
-        } catch (e) {
-            tg.showAlert('Failed to start payment');
-        } finally {
-            tg.MainButton.hideProgress();
-        }
-    }
-
-    init();
+    loadOrders();
 </script>
 </body>
-  </html>
+</html>
