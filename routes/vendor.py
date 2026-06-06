@@ -54,6 +54,29 @@ async def get_my_vendor(request: Request, db: Session = Depends(get_db)):
         "has_subaccount": bool(vendor.paystack_subaccount)
     }
 
+@router.get("/me")
+async def get_vendor_me(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+    
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if not vendor:
+        raise HTTPException(404, "Vendor not found")
+    
+    now = datetime.now(timezone.utc)
+    days_left = 0
+    if vendor.subscription_expiry:
+        days_left = max(0, (vendor.subscription_expiry - now).days)
+    
+    return {
+        "business_name": vendor.business_name,
+        "on_trial": vendor.commission_waived and days_left > 0,
+        "days_left": days_left,
+        "is_active": vendor.is_active
+    }
+
 @router.post("/register/{telegram_id}")
 async def register_vendor(telegram_id: int, data: VendorReg, request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
