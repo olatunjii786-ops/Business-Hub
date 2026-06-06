@@ -1,8 +1,9 @@
 import logging
 import traceback
+import httpx
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse # Added HTMLResponse
+from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
 from aiogram import Bot, Dispatcher, types, F
 from aiogram.filters import Command
@@ -14,7 +15,6 @@ from database import run_migrations, SessionLocal
 from utils import validate_init_data
 from models import Vendor
 
-# Import all route modules - add new ones here
 from routes import admin, vendor, shop, custom
 
 logging.basicConfig(level=logging.INFO)
@@ -27,7 +27,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# Register all routers - your new endpoints auto-load
 app.include_router(admin.router)
 app.include_router(vendor.router)
 app.include_router(shop.router)
@@ -38,6 +37,30 @@ async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Global error: {exc}")
     logger.error(traceback.format_exc())
     return JSONResponse(status_code=500, content={"detail": f"Server error: {str(exc)}"})
+
+# === TELEGRAM FILE PROXY ===
+@app.get("/file/{file_id}")
+async def get_telegram_file(file_id: str):
+    """Proxy Telegram images so we don't expose bot token in HTML"""
+    try:
+        async with httpx.AsyncClient() as client:
+            # Step 1: Get file_path from Telegram
+            res = await client.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}", timeout=10.0)
+            if res.status_code!= 200:
+                logger.error(f"getFile failed: {res.text}")
+                return Response(status_code=404)
+            
+            file_path = res.json()["result"]["file_path"]
+            
+            # Step 2: Download actual file
+            file_res = await client.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}", timeout=10.0)
+            if file_res.status_code!= 200:
+                return Response(status_code=404)
+                
+            return Response(content=file_res.content, media_type="image/jpeg")
+    except Exception as e:
+        logger.error(f"File proxy error: {e}")
+        return Response(status_code=500)
 
 # === TELEGRAM HANDLERS ===
 @dp.message(Command("start"))
@@ -56,7 +79,8 @@ async def cmd_start(message: types.Message):
 
     kb = InlineKeyboardMarkup(inline_keyboard=[
         [InlineKeyboardButton(text="🚀 Register Business", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/register"))],
-        [InlineKeyboardButton(text="📊 Vendor Dashboard", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/vendor"))]
+        [InlineKeyboardButton(text="📊 Vendor Dashboard", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/vendor"))],
+        [InlineKeyboardButton(text="🛍️ Browse Stores", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/marketplace"))]
     ])
     await message.answer(
         "Welcome to <b>Business Hub</b> 🚀\n\n"
@@ -91,7 +115,7 @@ async def handle_product_photo(message: types.Message):
     ]])
     await message.answer("Got your photo! Tap below to add name, price, and details:", reply_markup=kb)
 
-# === WEBAPP ROUTES - Keep these in main.py ===
+# === WEBAPP ROUTES ===
 @app.get("/webapp/admin", response_class=HTMLResponse)
 async def admin_webapp(request: Request):
     return templates.TemplateResponse(request, "admin.html")
@@ -108,6 +132,10 @@ async def register_webapp(request: Request):
 async def shop_webapp(request: Request, vendor_id: int):
     return templates.TemplateResponse(request, "shop.html")
 
+@app.get("/webapp/marketplace", response_class=HTMLResponse)
+async def marketplace_webapp(request: Request):
+    return templates.TemplateResponse(request, "customer.html")
+
 @app.get("/webapp/add-product/{file_id}", response_class=HTMLResponse)
 async def add_product_webapp(request: Request, file_id: str):
     return templates.TemplateResponse(request, "add_product.html", {"file_id": file_id})
@@ -115,7 +143,7 @@ async def add_product_webapp(request: Request, file_id: str):
 # === STARTUP ===
 @app.on_event("startup")
 async def on_startup():
-    run_migrations() # Auto-fixes DB schema - no shell needed
+    run_migrations()
     webhook_url = f"{RENDER_URL}/webhook"
     await bot.set_webhook(webhook_url)
     logger.info(f"Webhook set to {webhook_url}")
