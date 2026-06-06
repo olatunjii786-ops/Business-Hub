@@ -16,19 +16,19 @@ def get_db():
         db.close()
 
 def run_migrations():
-    """Auto-runs on startup. Adds missing columns safely."""
     try:
         Base.metadata.create_all(bind=engine)
         with engine.connect() as conn:
-            # Orders table
+            # Existing
             conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS items TEXT DEFAULT '[]';"))
             conn.execute(text("ALTER TABLE orders ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'pending';"))
-            # Vendors table
             conn.execute(text("ALTER TABLE vendors ADD COLUMN IF NOT EXISTS bank_name VARCHAR(100);"))
             conn.execute(text("ALTER TABLE vendors ADD COLUMN IF NOT EXISTS account_number VARCHAR(10);"))
             conn.execute(text("ALTER TABLE vendors ADD COLUMN IF NOT EXISTS paystack_subaccount VARCHAR(255);"))
-            # Products table
             conn.execute(text("ALTER TABLE products ADD COLUMN IF NOT EXISTS telegram_file_id VARCHAR(255);"))
+            # NEW
+            conn.execute(text("ALTER TABLE vendors ADD COLUMN IF NOT EXISTS business_description TEXT DEFAULT '';"))
+            conn.execute(text("ALTER TABLE vendors ADD COLUMN IF NOT EXISTS logo_file_id VARCHAR(255);"))
             conn.commit()
         logger.info("DB migrations completed")
     except Exception as e:
