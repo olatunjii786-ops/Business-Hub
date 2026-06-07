@@ -157,3 +157,74 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def root():
     return {"status": "Business Hub Engine Running"}
+
+@app.post("/api/orders/create")
+async def create_order(request: Request):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    if not init_data or not validate_init_data(init_data, BOT_TOKEN):
+        raise HTTPException(401)
+
+    user = parse_user(init_data)
+    data = await request.json()
+
+    conn = get_db()
+    cur = conn.cursor()
+
+    # Group items by vendor
+    vendors = {}
+    total = 0
+    for item in data['items']:
+        cur.execute("SELECT vendor_id, price, title FROM products WHERE id =?", (item['product_id'],))
+        p = cur.fetchone()
+        if not p:
+            continue
+        vid = p['vendor_id']
+        if vid not in vendors:
+            vendors[vid] = {'items': [], 'total': 0}
+        item_total = item['price'] * item['quantity']
+        vendors[vid]['items'].append({
+            'title': p['title'],
+            'qty': item['quantity'],
+            'price': item['price'],
+            'total': item_total
+        })
+        vendors[vid]['total'] += item_total
+        total += item_total
+
+    # Create one order per vendor
+    for vid, vdata in vendors.items():
+        cur.execute("""
+            INSERT INTO orders (vendor_id, customer_id, customer_name, customer_phone,
+                              delivery_address, total_amount, items_json, status, created_at)
+            VALUES (?,?,?,?,?,?,?, 'pending', datetime('now'))
+        """, (vid, user['id'], data['customer_name'], data['customer_phone'],
+              data['delivery_address'], vdata['total'], json.dumps(vdata['items'])))
+
+        order_id = cur.lastrowid
+
+        # Notify vendor via bot
+        cur.execute("SELECT telegram_id, business_name FROM vendors WHERE id =?", (vid,))
+        vendor = cur.fetchone()
+        if vendor:
+            items_text = "\n".join([f"• {i['qty']}x {i['title']} — ₦{i['total']:,}" for i in vdata['items']])
+            msg = f"""🎉 New Order #{order_id}
+
+Customer: {data['customer_name']}
+Phone: {data['customer_phone']}
+Address: {data['delivery_address']}
+
+Items:
+{items_text}
+
+Total: ₦{vdata['total']:,}
+
+Customer will pay you directly. Confirm payment then mark as delivered in your dashboard."""
+
+            try:
+                await bot.send_message(vendor['telegram_id'], msg)
+            except Exception as e:
+                print(f"Failed to notify vendor: {e}")
+
+    conn.commit()
+    conn.close()
+    return {"success": True}
