@@ -22,14 +22,18 @@ class Vendor(Base):
 
 class Product(Base):
     __tablename__ = "products"
-    id = Column(Integer, primary_key=True)
-    vendor_id = Column(BIGINT, ForeignKey("vendors.vendor_id"))  # Changed BigInteger -> BIGINT
-    title = Column(String, nullable=False)
-    price = Column(NUMERIC(10, 2), nullable=False)
-    quantity = Column(Integer, default=1)
-    is_active = Column(BOOLEAN, default=True)  # Changed Boolean -> BOOLEAN for consistency
-    telegram_file_id = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)  # Now DateTime is imported
+    
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.vendor_id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    description = Column(Text, default="") # ADDED
+    price = Column(Float, nullable=False)
+    quantity = Column(Integer, default=1) # ADDED
+    sizes = Column(String(500), default="") # ADDED
+    telegram_file_id = Column(String(500)) # ADDED
+    is_active = Column(Boolean, default=True) # ADDED
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    
     vendor = relationship("Vendor", back_populates="products")
     
 class Order(Base):
