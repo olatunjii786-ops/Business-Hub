@@ -1,6 +1,8 @@
 import logging
 import traceback
 import httpx
+from models import Product  # add this to your imports at the top
+from fastapi import HTTPException  # add this too
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, Response
@@ -157,6 +159,33 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def root():
     return {"status": "Business Hub Engine Running"}
+
+@app.get("/api/marketplace/products")
+async def get_marketplace_products():
+    """Public endpoint for customers to browse all active products"""
+    try:
+        with SessionLocal() as db:
+            products = db.query(Product).join(Vendor).filter(
+                Product.is_active == True,
+                Product.quantity > 0,
+                Vendor.is_active == True
+            ).all()
+            
+            result = []
+            for p in products:
+                result.append({
+                    "id": p.product_id,
+                    "title": p.title,
+                    "price": p.price,
+                    "quantity": p.quantity,
+                    "telegram_file_id": p.telegram_file_id,
+                    "vendor_id": p.vendor.vendor_id,
+                    "vendor_name": p.vendor.business_name
+                })
+            return result
+    except Exception as e:
+        logger.error(f"Marketplace products error: {e}")
+        return []
 
 @app.post("/api/orders/create")
 async def create_order(request: Request):
