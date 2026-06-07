@@ -255,3 +255,21 @@ Customer will pay you directly. Confirm payment then mark as delivered in your d
     conn.commit()
     conn.close()
     return {"success": True}
+
+@app.delete("/api/products/{product_id}")
+async def delete_product(product_id: int, request: Request):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    if not init_data or not validate_init_data(init_data, BOT_TOKEN):
+        raise HTTPException(401)
+    user = parse_user(init_data)
+    
+    with SessionLocal() as db:
+        product = db.query(Product).filter(Product.id == product_id).first()
+        if not product:
+            raise HTTPException(404)
+        if product.vendor_id != user['id']:
+            raise HTTPException(403)
+        
+        db.delete(product)
+        db.commit()
+    return {"success": True}
