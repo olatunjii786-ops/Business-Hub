@@ -1,311 +1,159 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Vendor HQ</title>
+    <title>Vendor Dashboard</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        :root {
-            --grad-1: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --grad-2: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
-            --grad-3: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
-            --grad-4: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%);
-            --glass: rgba(255,255,255,0.06);
-            --border: rgba(255,255,255,0.12);
-        }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
-            background: #0a0a0a;
-            color: #fff;
-            -webkit-font-smoothing: antialiased;
-            overflow-x: hidden;
-            position: relative;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--tg-theme-bg-color, #0f0f23);
+            color: var(--tg-theme-text-color, #ffffff);
+            padding: 16px;
+            padding-bottom: 80px;
         }
-        body::before {
+        .header { margin-bottom: 24px; }
+        .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+        .header p { color: var(--tg-theme-hint-color, #8b8b8b); font-size: 15px; }
+        
+        .store-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 20px;
+            padding: 20px;
+            margin-bottom: 24px;
+            position: relative;
+            overflow: hidden;
+        }
+        .store-card::before {
             content: '';
-            position: fixed;
+            position: absolute;
             top: -50%;
-            left: -50%;
+            right: -50%;
             width: 200%;
             height: 200%;
-            background: radial-gradient(circle at 20% 50%, rgba(102,126,234,0.15) 0%, transparent 50%),
-                        radial-gradient(circle at 80% 80%, rgba(245,87,108,0.1) 0%, transparent 50%),
-                        radial-gradient(circle at 40% 20%, rgba(67,233,123,0.1) 0%, transparent 50%);
-            animation: bgShift 20s ease infinite;
-            z-index: 0;
+            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
         }
-        @keyframes bgShift { 0%, 100% { transform: translate(0, 0) rotate(0deg); } 50% { transform: translate(-10%, -10%) rotate(180deg); } }
-
-      .container { position: relative; z-index: 1; padding: 20px 16px 100px; max-width: 600px; margin: 0 auto; }
-
-      .header { margin-bottom: 24px; animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        @keyframes slideDown { from { opacity: 0; transform: translateY(-30px); } to { opacity: 1; transform: translateY(0); } }
-      .greeting { font-size: 32px; font-weight: 800; letter-spacing: -1px; margin-bottom: 4px; }
-      .subtext { opacity: 0.5; font-size: 15px; }
-
-      .store-link-card {
-            background: var(--grad-1);
-            border-radius: 20px;
-            padding: 18px;
-            margin-bottom: 24px;
-            position: relative;
-            overflow: hidden;
-            animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.05s backwards;
-        }
-      .store-link-card::before {
-            content: '';
-            position: absolute;
-            top: -30%;
-            right: -10%;
-            width: 150px;
-            height: 150px;
-            background: rgba(255,255,255,0.15);
-            border-radius: 50%;
-            animation: float 6s ease-in-out infinite;
-        }
-        @keyframes float { 0%, 100% { transform: translate(0, 0); } 50% { transform: translate(-15px, 15px); } }
-
-      .trial-banner {
-            background: var(--grad-4);
-            border-radius: 20px;
-            padding: 18px;
-            margin-bottom: 24px;
-            position: relative;
-            overflow: hidden;
-            animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s backwards;
-        }
-      .trial-banner::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -20%;
-            width: 200px;
-            height: 200px;
+        .store-label { font-size: 13px; opacity: 0.9; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+        .store-link { font-size: 14px; font-weight: 600; word-break: break-all; margin-bottom: 16px; }
+        .share-btn {
             background: rgba(255,255,255,0.2);
-            border-radius: 50%;
-            animation: float 6s ease-in-out infinite;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.3);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            width: 100%;
+            cursor: pointer;
+            transition: all 0.2s;
         }
-      .trial-content { position: relative; z-index: 1; }
-      .trial-title { font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 4px; }
-      .trial-days { font-size: 36px; font-weight: 900; }
-
-      .stats-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 24px; }
-      .stat-card {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 18px;
-            position: relative;
-            overflow: hidden;
-            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            animation: popIn 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
+        .share-btn:active { transform: scale(0.98); background: rgba(255,255,255,0.3); }
+        
+        .trial-banner {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-      .stat-card:nth-child(1) { animation-delay: 0.2s; }
-      .stat-card:nth-child(2) { animation-delay: 0.3s; }
-      .stat-card:nth-child(3) { animation-delay: 0.4s; }
-      .stat-card:nth-child(4) { animation-delay: 0.5s; }
-        @keyframes popIn { from { opacity: 0; transform: scale(0.8) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
-      .stat-card:active { transform: scale(0.96); }
-      .stat-card::after {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: var(--grad-1);
-            transform: scaleX(0);
-            transition: transform 0.3s;
+        .trial-text { font-size: 14px; font-weight: 600; }
+        .trial-days { font-size: 24px; font-weight: 700; }
+        
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+            margin-bottom: 24px;
         }
-      .stat-card:hover::after { transform: scaleX(1); }
-      .stat-icon { font-size: 28px; margin-bottom: 10px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.3)); }
-      .stat-value { font-size: 28px; font-weight: 900; margin-bottom: 2px; }
-      .stat-label { font-size: 12px; opacity: 0.5; text-transform: uppercase; letter-spacing: 0.5px; }
-
-      .tabs {
+        .stat-card {
+            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
+            border-radius: 16px;
+            padding: 16px;
+        }
+        .stat-icon { font-size: 24px; margin-bottom: 8px; }
+        .stat-value { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+        .stat-label { font-size: 13px; color: var(--tg-theme-hint-color, #8b8b8b); text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .tabs {
             display: flex;
             gap: 8px;
             margin-bottom: 20px;
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            padding: 6px;
-            border-radius: 16px;
-            animation: slideDown 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.6s backwards;
+            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
+            padding: 4px;
+            border-radius: 12px;
         }
-      .tab {
+        .tab {
             flex: 1;
-            padding: 12px;
+            padding: 10px;
             border: none;
             background: transparent;
-            color: rgba(255,255,255,0.5);
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 14px;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-      .tab.active {
-            background: var(--grad-1);
-            color: white;
-            box-shadow: 0 4px 20px rgba(102,126,234,0.4);
-        }
-      .tab:active { transform: scale(0.95); }
-
-      .section { display: none; }
-      .section.active { display: block; animation: fadeIn 0.4s; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-      .card {
-            background: var(--glass);
-            backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            border-radius: 20px;
-            padding: 18px;
-            margin-bottom: 14px;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            animation: cardSlide 0.5s cubic-bezier(0.34, 1.56, 0.64, 1) backwards;
-            position: relative;
-        }
-        @keyframes cardSlide { from { opacity: 0; transform: translateX(-30px); } to { opacity: 1; transform: translateX(0); } }
-      .card:active { transform: scale(0.98); background: rgba(255,255,255,0.08); }
-      .card-header { display: flex; justify-content: space-between; align-items: start; margin-bottom: 14px; }
-      .card-title { font-weight: 700; font-size: 17px; margin-bottom: 4px; }
-      .card-subtitle { font-size: 13px; opacity: 0.5; }
-      .badge {
-            padding: 6px 12px;
-            border-radius: 10px;
-            font-size: 11px;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-      .badge.paid { background: rgba(67,233,123,0.2); color: #43e97b; }
-      .badge.delivered { background: rgba(79,172,254,0.2); color: #4facfe; }
-      .badge.active { background: rgba(67,233,123,0.2); color: #43e97b; }
-      .badge.inactive { background: rgba(245,87,108,0.2); color: #f5576c; }
-
-      .item-list { margin: 14px 0; }
-      .item-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 10px 0;
-            border-bottom: 1px solid rgba(255,255,255,0.05);
-            font-size: 14px;
-        }
-      .item-row:last-child { border-bottom: none; }
-
-      .total-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 14px 0 0;
-            margin-top: 14px;
-            border-top: 2px solid rgba(255,255,255,0.1);
-            font-weight: 800;
-            font-size: 16px;
-        }
-      .total-val { background: var(--grad-4); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-
-      .btn {
-            width: 100%;
-            padding: 16px;
-            border: none;
-            border-radius: 14px;
-            font-weight: 800;
+            color: var(--tg-theme-hint-color, #8b8b8b);
+            border-radius: 8px;
             font-size: 15px;
+            font-weight: 600;
             cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-top: 12px;
+            transition: all 0.2s;
         }
-      .btn:active { transform: scale(0.96); }
-      .btn-primary { background: var(--grad-4); color: #0a0a0a; box-shadow: 0 4px 20px rgba(67,233,123,0.3); }
-      .btn-ghost { background: var(--glass); color: white; border: 1px solid var(--border); }
-      .btn-danger { background: var(--grad-2); color: white; }
-
-      .btn-row { display: flex; gap: 10px; margin-top: 12px; }
-      .btn-row .btn { margin-top: 0; }
-
-      .fab {
-            position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 64px;
-            height: 64px;
-            border-radius: 20px;
-            background: var(--grad-2);
-            border: none;
-            color: white;
-            font-size: 32px;
-            cursor: pointer;
-            box-shadow: 0 8px 32px rgba(245,87,108,0.4);
-            transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-            z-index: 100;
-            animation: fabIn 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) 0.8s backwards;
-        }
-        @keyframes fabIn { from { opacity: 0; transform: scale(0) rotate(-180deg); } to { opacity: 1; transform: scale(1) rotate(0deg); } }
-      .fab:active { transform: scale(0.9) rotate(90deg); }
-
-      .empty {
-            text-align: center;
-            padding: 80px 20px;
-            animation: fadeIn 0.5s;
-        }
-      .empty-icon { font-size: 80px; margin-bottom: 20px; animation: bounce 2s ease-in-out infinite; }
-        @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-20px); } }
-      .empty-title { font-size: 20px; font-weight: 700; margin-bottom: 8px; }
-      .empty-text { opacity: 0.5; font-size: 15px; }
-
-      .stock-indicator {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: 10px;
-            font-size: 12px;
-            font-weight: 700;
-        }
-      .stock-indicator.good { background: rgba(67,233,123,0.15); color: #43e97b; }
-      .stock-indicator.low { background: rgba(250,204,21,0.15); color: #facc15; }
-      .stock-indicator.out { background: rgba(245,87,108,0.15); color: #f5576c; }
-      .dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; animation: pulse 2s ease-in-out infinite; }
-        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-      .product-img-box {
-            width: 80px;
-            height: 80px;
-            border-radius: 16px;
-            background: rgba(255,255,255,0.05);
-            overflow: hidden;
-            flex-shrink: 0;
-            position: relative;
-        }
-      .product-img-box img { width: 100%; height: 100%; object-fit: cover; }
-      .product-img-placeholder {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-            font-size: 32px;
-            opacity: 0.3;
+        .tab.active {
+            background: var(--tg-theme-button-color, #667eea);
+            color: var(--tg-theme-button-text-color, #ffffff);
         }
         
-      .delete-btn {
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 16px;
+        }
+        .section-title { font-size: 20px; font-weight: 700; }
+        .add-btn {
+            background: var(--tg-theme-button-color, #667eea);
+            color: var(--tg-theme-button-text-color, #ffffff);
+            border: none;
+            padding: 8px 16px;
+            border-radius: 10px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .products-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
+        }
+        .card {
+            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
+            border-radius: 16px;
+            overflow: hidden;
+            position: relative;
+            animation: fadeIn 0.3s ease-out forwards;
+            opacity: 0;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .delete-btn {
             position: absolute;
-            top: 12px;
-            right: 12px;
-            width: 36px;
-            height: 36px;
-            border-radius: 12px;
-            background: rgba(245,87,108,0.9);
+            top: 8px;
+            right: 8px;
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            background: rgba(245,87,108,0.95);
             backdrop-filter: blur(10px);
             border: none;
             color: white;
-            font-size: 18px;
+            font-size: 16px;
             cursor: pointer;
             display: flex;
             align-items: center;
@@ -313,308 +161,283 @@
             z-index: 10;
             transition: all 0.2s;
         }
-      .delete-btn:active { transform: scale(0.85); }
+        .delete-btn:active { transform: scale(0.9); }
+        .card-image {
+            width: 100%;
+            aspect-ratio: 1;
+            background: #2a2a3e;
+            position: relative;
+            overflow: hidden;
+        }
+        .card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .stock-badge {
+            position: absolute;
+            top: 8px;
+            left: 8px;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(10px);
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 600;
+        }
+        .stock-badge.low { background: rgba(255,193,7,0.9); color: #000; }
+        .stock-badge.out { background: rgba(245,87,108,0.9); color: #fff; }
+        .card-content { padding: 12px; }
+        .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .card-price { font-size: 16px; font-weight: 700; color: #38ef7d; }
+        
+        .empty-state {
+            text-align: center;
+            padding: 60px 20px;
+        }
+        .empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.3; }
+        .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+        .empty-text { color: var(--tg-theme-hint-color, #8b8b8b); font-size: 14px; }
+        
+        .fab {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            width: 56px;
+            height: 56px;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(102,126,234,0.4);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            transition: all 0.2s;
+        }
+        .fab:active { transform: scale(0.95); }
+        .hidden { display: none !important; }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <div class="greeting" id="greeting">Hey Boss 👋</div>
-            <div class="subtext">Here's your store today</div>
-        </div>
+    <div class="header">
+        <h1 id="vendor-name">Hey 👋</h1>
+        <p>Here's your store today</p>
+    </div>
 
-        <div class="store-link-card">
-            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; position: relative; z-index: 1;">
-                <div>
-                    <div style="font-size: 14px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; opacity: 0.8; margin-bottom: 4px;">Your Store Link</div>
-                    <div style="font-size: 16px; font-weight: 800; word-break: break-all;" id="store_link_text">Loading...</div>
-                </div>
-                <div style="font-size: 32px;">🔗</div>
-            </div>
-            <button class="btn" style="background: rgba(255,255,255,0.2); color: white; margin: 0; position: relative; z-index: 1;" onclick="shareStore()">
-                Share Store Link
-            </button>
-        </div>
+    <div class="store-card">
+        <div class="store-label">Your Store Link</div>
+        <div class="store-link" id="store-link">Loading...</div>
+        <button class="share-btn" onclick="shareStore()">Share Store Link</button>
+    </div>
 
-        <div class="trial-banner" id="trial_banner">
-            <div class="trial-content">
-                <div class="trial-title">Trial Period</div>
-                <div class="trial-days"><span id="days_left">7</span> days left</div>
-            </div>
+    <div class="trial-banner" id="trial-banner">
+        <div>
+            <div class="trial-text">Trial Period</div>
+            <div class="trial-days"><span id="trial-days">0</span> days left</div>
         </div>
+        <div style="font-size: 32px;">🎁</div>
+    </div>
 
-        <div class="stats-grid">
-            <div class="stat-card">
-                <div class="stat-icon">💰</div>
-                <div class="stat-value" id="stat_revenue">₦0</div>
-                <div class="stat-label">Revenue</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">📦</div>
-                <div class="stat-value" id="stat_orders">0</div>
-                <div class="stat-label">Orders</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">🎯</div>
-                <div class="stat-value" id="stat_products">0</div>
-                <div class="stat-label">Products</div>
-            </div>
-            <div class="stat-card">
-                <div class="stat-icon">👀</div>
-                <div class="stat-value" id="stat_views">0</div>
-                <div class="stat-label">Views</div>
-            </div>
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-icon">💰</div>
+            <div class="stat-value">₦<span id="revenue">0</span></div>
+            <div class="stat-label">Revenue</div>
         </div>
-
-        <div class="tabs">
-            <button class="tab active" data-tab="orders">Orders</button>
-            <button class="tab" data-tab="products">Products</button>
-            <button class="tab" data-tab="analytics">Analytics</button>
+        <div class="stat-card">
+            <div class="stat-icon">📦</div>
+            <div class="stat-value" id="orders">0</div>
+            <div class="stat-label">Orders</div>
         </div>
-
-        <div class="section active" id="orders">
-            <div id="orders_list"></div>
-            <div class="empty" id="orders_empty" style="display:none;">
-                <div class="empty-icon">🎉</div>
-                <div class="empty-title">No orders yet</div>
-                <div class="empty-text">Share your store link to get your first sale</div>
-            </div>
+        <div class="stat-card">
+            <div class="stat-icon">🎯</div>
+            <div class="stat-value" id="products-count">0</div>
+            <div class="stat-label">Products</div>
         </div>
-
-        <div class="section" id="products">
-            <div id="products_list"></div>
-            <div class="empty" id="products_empty" style="display:none;">
-                <div class="empty-icon">📸</div>
-                <div class="empty-title">No products yet</div>
-                <div class="empty-text">Tap the + button to add your first product</div>
-            </div>
-        </div>
-
-        <div class="section" id="analytics">
-            <div class="card">
-                <div class="card-title">Coming Soon 🚀</div>
-                <div class="card-subtitle">Sales charts, best sellers, customer insights</div>
-            </div>
+        <div class="stat-card">
+            <div class="stat-icon">👁️</div>
+            <div class="stat-value" id="views">0</div>
+            <div class="stat-label">Views</div>
         </div>
     </div>
 
-    <button class="fab" id="fab_btn">+</button>
+    <div class="tabs">
+        <button class="tab" onclick="switchTab('orders')">Orders</button>
+        <button class="tab active" onclick="switchTab('products')">Products</button>
+        <button class="tab" onclick="switchTab('analytics')">Analytics</button>
+    </div>
 
-<script>
-    const tg = window.Telegram.WebApp;
-    tg.ready();
-    tg.expand();
-    tg.setHeaderColor('#0a0a0a');
-
-    let vendorData = {};
-    const BOT_USERNAME = "isaacbusinessbot";
-
-    window.shareStore = function() {
-        const storeSlug = vendorData.business_name.replace(/\s+/g, '_').toLowerCase();
-        const link = `https://t.me/${BOT_USERNAME}?start=shop_${storeSlug}`;
-        tg.HapticFeedback.notificationOccurred('success');
+    <div id="products-section">
+        <div class="section-header">
+            <h2 class="section-title">Products</h2>
+            <button class="add-btn" onclick="addProduct()">
+                <span>+</span> Add Product
+            </button>
+        </div>
         
-        if (navigator.share) {
-            navigator.share({
-                title: vendorData.business_name,
-                text: `Check out my store on Business Hub!`,
-                url: link
-            }).catch(() => {
-                tg.showAlert(`Copy this link:\n\n${link}`);
-            });
-        } else {
-            tg.showAlert(`Copy this link:\n\n${link}`);
+        <div id="products-grid" class="products-grid"></div>
+        
+        <div id="empty-state" class="empty-state">
+            <div class="empty-icon">📦</div>
+            <div class="empty-title">No products yet</div>
+            <div class="empty-text">Add your first product to start selling</div>
+        </div>
+    </div>
+
+    <div id="orders-section" class="hidden">
+        <div class="empty-state">
+            <div class="empty-icon">📋</div>
+            <div class="empty-title">No orders yet</div>
+            <div class="empty-text">Orders will appear here when customers buy</div>
+        </div>
+    </div>
+
+    <div id="analytics-section" class="hidden">
+        <div class="empty-state">
+            <div class="empty-icon">📊</div>
+            <div class="empty-title">Analytics coming soon</div>
+            <div class="empty-text">Track your store performance</div>
+        </div>
+    </div>
+
+    <button class="fab" onclick="addProduct()">+</button>
+
+    <script>
+        const tg = window.Telegram.WebApp;
+        tg.expand();
+        tg.ready();
+        
+        let vendorData = null;
+
+        async function init() {
+            await loadVendor();
+            await loadProducts();
         }
-    }
 
-    window.switchTab = function(tab) {
-        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
-        document.querySelector(`[data-tab="${tab}"]`).classList.add('active');
-        document.getElementById(tab).classList.add('active');
-        tg.HapticFeedback.impactOccurred('light');
-        if (tab === 'orders') loadOrders();
-        if (tab === 'products') loadProducts();
-        if (tab === 'analytics') loadAnalytics();
-    }
-
-    window.markDelivered = async function(id) {
-        tg.HapticFeedback.notificationOccurred('success');
-        const res = await fetch(`/api/vendor/orders/${id}/deliver`, {
-            method: 'POST',
-            headers: { 'X-Telegram-Init-Data': tg.initData }
-        });
-        if (res.ok) loadOrders();
-    }
-
-    window.toggleProduct = async function(id) {
-        tg.HapticFeedback.impactOccurred('medium');
-        await fetch(`/api/vendor/products/${id}/toggle`, {
-            method: 'POST',
-            headers: { 'X-Telegram-Init-Data': tg.initData }
-        });
-        loadProducts();
-    }
-
-    window.deleteProduct = async function(id) {
-        tg.showConfirm('Delete this product permanently?', async (confirmed) => {
-            if (!confirmed) return;
-            
-            tg.HapticFeedback.notificationOccurred('warning');
+        async function loadVendor() {
             try {
-                const res = await fetch(`/api/products/${id}`, {
-                    method: 'DELETE',
+                const res = await fetch('/api/vendor/me', {
+                    headers: { 'X-Telegram-Init-Data': tg.initData }
+                });
+                if (!res.ok) throw new Error('Failed to load vendor');
+                
+                vendorData = await res.json();
+                document.getElementById('vendor-name').textContent = `Hey ${vendorData.business_name} 👋`;
+                document.getElementById('store-link').textContent = `t.me/isaacbusinessbot?start=shop_${vendorData.business_name.toLowerCase().replace(/\s+/g, '_')}`;
+                document.getElementById('trial-days').textContent = vendorData.days_left;
+                
+                if (vendorData.days_left <= 0) {
+                    document.getElementById('trial-banner').style.display = 'none';
+                }
+            } catch (e) {
+                console.error('loadVendor error:', e);
+                tg.showAlert('Failed to load vendor data');
+            }
+        }
+
+        async function loadProducts() {
+            try {
+                const res = await fetch('/api/vendor/products', {
                     headers: { 'X-Telegram-Init-Data': tg.initData }
                 });
                 
-                if (res.ok) {
-                    tg.HapticFeedback.notificationOccurred('success');
-                    loadProducts();
-                } else {
-                    tg.showAlert('Failed to delete product');
+                if (!res.ok) {
+                    console.error('Products API failed:', res.status);
+                    return;
                 }
+                
+                const products = await res.json();
+                console.log('Products loaded:', products);
+                
+                const grid = document.getElementById('products-grid');
+                const emptyState = document.getElementById('empty-state');
+                
+                document.getElementById('products-count').textContent = products.length;
+                
+                if (products.length === 0) {
+                    emptyState.style.display = 'block';
+                    grid.style.display = 'none';
+                    return;
+                }
+                
+                emptyState.style.display = 'none';
+                grid.style.display = 'grid';
+                
+                grid.innerHTML = products.map((p, i) => {
+                    let stockBadge = '';
+                    if (p.quantity === 0) {
+                        stockBadge = '<div class="stock-badge out">Out of stock</div>';
+                    } else if (p.quantity <= 5) {
+                        stockBadge = `<div class="stock-badge low">Low: ${p.quantity}</div>`;
+                    }
+                    
+                    return `
+                        <div class="card" style="animation-delay: ${i * 0.05}s">
+                            <button class="delete-btn" onclick="deleteProduct(${p.id})">🗑️</button>
+                            <div class="card-image">
+                                <img src="/file/${p.telegram_file_id}" alt="${p.title}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'200\\'%3E%3Crect fill=\\'%232a2a3e\\' width=\\'200\\' height=\\'200\\'/%3E%3C/svg%3E'">
+                                ${stockBadge}
+                            </div>
+                            <div class="card-content">
+                                <h3 class="card-title">${p.title}</h3>
+                                <p class="card-price">₦${p.price.toLocaleString()}</p>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
             } catch (e) {
-                tg.showAlert('Network error');
+                console.error('loadProducts error:', e);
             }
-        });
-    }
+        }
 
-    window.addProduct = function() {
-        tg.HapticFeedback.impactOccurred('heavy');
-        tg.showAlert('To add products:\n\n1. Go back to chat\n2. Send me a product photo\n3. I\'ll ask for price, name, stock\n\nComing soon: in-app product creator 🚀');
-    }
-
-    async function init() {
-        try {
-            const res = await fetch('/api/vendor/me', {
-                headers: { 'X-Telegram-Init-Data': tg.initData }
+        window.deleteProduct = async function(id) {
+            tg.showConfirm('Delete this product permanently?', async (confirmed) => {
+                if (!confirmed) return;
+                tg.HapticFeedback.notificationOccurred('warning');
+                try {
+                    const res = await fetch(`/api/products/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'X-Telegram-Init-Data': tg.initData }
+                    });
+                    if (res.ok) {
+                        tg.HapticFeedback.notificationOccurred('success');
+                        await loadProducts();
+                    } else {
+                        tg.showAlert('Failed to delete');
+                    }
+                } catch (e) {
+                    tg.showAlert('Network error');
+                }
             });
-            if (!res.ok) throw new Error('Failed to load vendor');
-            vendorData = await res.json();
+        }
 
-            document.getElementById('greeting').textContent = `Hey ${vendorData.business_name.split(' ')[0]} 👋`;
-            document.getElementById('days_left').textContent = vendorData.days_left;
+        window.addProduct = function() {
+            tg.HapticFeedback.impactOccurred('light');
+            tg.close();
+        }
+
+        window.shareStore = function() {
+            const link = document.getElementById('store-link').textContent;
+            const text = `Check out my store on Business Hub! ${link}`;
+            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
+        }
+
+        window.switchTab = function(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
             
-            const storeSlug = vendorData.business_name.replace(/\s+/g, '_').toLowerCase();
-            document.getElementById('store_link_text').textContent = `t.me/${BOT_USERNAME}?start=shop_${storeSlug}`;
-
-            if (!vendorData.on_trial || vendorData.days_left <= 0) {
-                document.getElementById('trial_banner').style.display = 'none';
-            }
-
-            loadOrders();
-        } catch (e) {
-            tg.showAlert('Failed to load dashboard: ' + e.message);
+            document.getElementById('products-section').classList.add('hidden');
+            document.getElementById('orders-section').classList.add('hidden');
+            document.getElementById('analytics-section').classList.add('hidden');
+            document.getElementById(`${tab}-section`).classList.remove('hidden');
         }
-    }
 
-    async function loadOrders() {
-        try {
-            const res = await fetch('/api/vendor/orders', {
-                headers: { 'X-Telegram-Init-Data': tg.initData }
-            });
-            const orders = await res.json();
-            const list = document.getElementById('orders_list');
-            const empty = document.getElementById('orders_empty');
-
-            document.getElementById('stat_orders').textContent = orders.length;
-            document.getElementById('stat_revenue').textContent = '₦' + orders.reduce((s,o) => s + o.you_keep, 0).toLocaleString();
-
-            if (orders.length === 0) {
-                list.innerHTML = '';
-                empty.style.display = 'block';
-                return;
-            }
-            empty.style.display = 'none';
-
-            list.innerHTML = orders.map((o, i) => `
-                <div class="card" style="animation-delay: ${i * 0.05}s">
-                    <div class="card-header">
-                        <div>
-                            <div class="card-title">${o.customer_name}</div>
-                            <div class="card-subtitle">${o.customer_phone} • ${new Date(o.created_at).toLocaleDateString('en-US', {month: 'short', day: 'numeric'})}</div>
-                        </div>
-                        <div class="badge ${o.status}">${o.status}</div>
-                    </div>
-                    <div class="item-list">
-                        ${o.items.map(i => `<div class="item-row"><span>${i.quantity}x ${i.title}</span><span>₦${(i.price * i.quantity).toLocaleString()}</span></div>`).join('')}
-                    </div>
-                    <div style="margin: 14px 0; padding: 12px; background: rgba(255,255,255,0.03); border-radius: 12px; font-size: 13px;">
-                        📍 ${o.delivery_address}
-                    </div>
-                    <div class="total-row">
-                        <span>You Keep:</span>
-                        <span class="total-val">₦${o.you_keep.toLocaleString()}</span>
-                    </div>
-                    ${o.status === 'paid'? `<button class="btn btn-primary" onclick="markDelivered(${o.id})">Mark as Delivered</button>` : ''}
-                </div>
-            `).join('');
-        } catch (e) {
-            console.error('Orders load failed:', e);
-        }
-    }
-
-    async function loadProducts() {
-        try {
-            const res = await fetch('/api/vendor/products', {
-                headers: { 'X-Telegram-Init-Data': tg.initData }
-            });
-            const products = await res.json();
-            const list = document.getElementById('products_list');
-            const empty = document.getElementById('products_empty');
-
-            document.getElementById('stat_products').textContent = products.length;
-
-            if (products.length === 0) {
-                list.innerHTML = '';
-                empty.style.display = 'block';
-                return;
-            }
-            empty.style.display = 'none';
-
-            list.innerHTML = products.map((p, i) => `
-                <div class="card" style="animation-delay: ${i * 0.05}s">
-                    <button class="delete-btn" onclick="deleteProduct(${p.id})">🗑️</button>
-                    <div style="display: flex; gap: 14px;">
-                        <div class="product-img-box">
-                            ${p.telegram_file_id?
-                                `<img src="/file/${p.telegram_file_id}" alt="${p.title}">` :
-                                `<div class="product-img-placeholder">📦</div>`
-                            }
-                        </div>
-                        <div style="flex: 1; min-width: 0;">
-                            <div class="card-header" style="margin-bottom: 8px;">
-                                <div>
-                                    <div class="card-title" style="font-size: 16px; margin-bottom: 4px;">${p.title}</div>
-                                    <div style="font-size: 20px; font-weight: 900;">₦${p.price.toLocaleString()}</div>
-                                </div>
-                                <div class="badge ${p.is_active? 'active' : 'inactive'}">${p.is_active? 'LIVE' : 'HIDDEN'}</div>
-                            </div>
-                            <div class="stock-indicator ${p.quantity === 0? 'out' : p.quantity < 5? 'low' : 'good'}">
-                                <div class="dot"></div>
-                                ${p.quantity === 0? 'Out of stock' : `${p.quantity} left`}
-                            </div>
-                        </div>
-                    </div>
-                    <button class="btn btn-ghost" onclick="toggleProduct(${p.id})">${p.is_active? 'Hide from Store' : 'Show in Store'}</button>
-                </div>
-            `).join('');
-        } catch (e) {
-            console.error('Products load failed:', e);
-        }
-    }
-
-    async function loadAnalytics() {
-        document.getElementById('stat_views').textContent = '0';
-    }
-
-    document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.addEventListener('click', () => window.switchTab(tab.dataset.tab));
-        });
-        document.getElementById('fab_btn').addEventListener('click', window.addProduct);
         init();
-    });
-</script>
+    </script>
 </body>
 </html>
