@@ -29,7 +29,7 @@ class ProductCreate(BaseModel):
     description: str = ""
     price: float
     quantity: int
-    sizes: str
+    sizes: str = ""
 
 @router.get("/me")
 async def get_vendor_me(request: Request, db: Session = Depends(get_db)):
@@ -131,14 +131,19 @@ async def get_my_products(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(403, "Invalid auth")
 
-    products = db.query(Product).filter(Product.vendor_id == user['id'], Product.is_deleted == False).order_by(Product.created_at.desc()).all()
+    user_id = int(user['id'])
+    logger.info(f"Vendor {user_id} requesting products")
+
+    products = db.query(Product).filter(Product.vendor_id == user_id).order_by(Product.created_at.desc()).all()
+    logger.info(f"Found {len(products)} products for vendor {user_id}")
+    
     return [{
         "id": p.id,
         "title": p.title,
         "description": p.description,
         "price": float(p.price),
         "quantity": p.quantity,
-        "is_active": p.is_active,
+        "is_active": getattr(p, 'is_active', True),
         "telegram_file_id": p.telegram_file_id
     } for p in products]
 
@@ -160,11 +165,29 @@ async def create_product(request: Request, data: ProductCreate, db: Session = De
         price=data.price,
         quantity=data.quantity,
         sizes=data.sizes,
-        telegram_file_id=data.file_id
+        telegram_file_id=data.file_id,
+        is_active=True
     )
     db.add(product)
     db.commit()
+    db.refresh(product)
+    logger.info(f"Created product {product.id} for vendor {user['id']}")
     return {"status": "created", "product_id": product.id}
+
+@router.delete("/products/{product_id}")
+async def delete_product(product_id: int, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+
+    product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
+    if not product:
+        raise HTTPException(404, "Product not found")
+    
+    db.delete(product)
+    db.commit()
+    return {"status": "deleted"}
 
 @router.post("/products/{product_id}/toggle")
 async def toggle_product(product_id: int, request: Request, db: Session = Depends(get_db)):
@@ -233,12 +256,12 @@ async def get_public_vendors(db: Session = Depends(get_db)):
         "business_name": v.business_name,
         "business_description": v.business_description or "",
         "logo_file_id": v.logo_file_id,
-        "product_count": db.query(Product).filter(Product.vendor_id == v.vendor_id, Product.is_active == True, Product.is_deleted == False).count()
+        "product_count": db.query(Product).filter(Product.vendor_id == v.vendor_id, Product.is_active == True).count()
     } for v in vendors]
 
 @router.get("/public/products")
 async def get_public_products(vendor_id: Optional[int] = None, db: Session = Depends(get_db)):
-    query = db.query(Product).filter(Product.is_active == True, Product.quantity > 0, Product.is_deleted == False)
+    query = db.query(Product).filter(Product.is_active == True, Product.quantity > 0)
     if vendor_id:
         query = query.filter(Product.vendor_id == vendor_id)
     
