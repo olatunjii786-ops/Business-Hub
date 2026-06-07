@@ -1,6 +1,7 @@
 import logging
 import traceback
 import httpx
+from utils import validate_init_data, parse_user  # add parse_user
 from models import Product  # add this to your imports at the top
 from fastapi import HTTPException  # add this too
 from fastapi import FastAPI, Request
@@ -255,6 +256,56 @@ Customer will pay you directly. Confirm payment then mark as delivered in your d
     conn.commit()
     conn.close()
     return {"success": True}
+    
+@app.get("/api/vendor/products")
+async def get_vendor_products(request: Request):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    if not init_data or not validate_init_data(init_data, BOT_TOKEN):
+        raise HTTPException(401, "Unauthorized")
+    
+    user = parse_user(init_data)
+    logger.info(f"Vendor {user['id']} requesting products")
+    
+    with SessionLocal() as db:
+        products = db.query(Product).filter(Product.vendor_id == user['id']).all()
+        logger.info(f"Found {len(products)} products for vendor {user['id']}")
+        
+        return [
+            {
+                "id": p.id,
+                "title": p.title,
+                "price": float(p.price),
+                "quantity": p.quantity,
+                "is_active": p.is_active,
+                "telegram_file_id": p.telegram_file_id
+            }
+            for p in products
+        ]
+
+@app.get("/api/vendor/me")
+async def get_vendor_me(request: Request):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    if not init_data or not validate_init_data(init_data, BOT_TOKEN):
+        raise HTTPException(401)
+    
+    user = parse_user(init_data)
+    
+    with SessionLocal() as db:
+        vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+        if not vendor:
+            raise HTTPException(404, "Vendor not found")
+        
+        from datetime import datetime
+        days_left = 0
+        if vendor.subscription_expiry:
+            days_left = (vendor.subscription_expiry - datetime.now(vendor.subscription_expiry.tzinfo)).days
+        
+        return {
+            "vendor_id": vendor.vendor_id,
+            "business_name": vendor.business_name,
+            "days_left": max(0, days_left),
+            "on_trial": vendor.commission_waived
+    }
 
 @app.delete("/api/products/{product_id}")
 async def delete_product(product_id: int, request: Request):
