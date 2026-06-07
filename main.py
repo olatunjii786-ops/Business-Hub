@@ -1,10 +1,8 @@
 import logging
 import traceback
 import httpx
-from utils import validate_init_data
-from models import Product  # add this to your imports at the top
-from fastapi import HTTPException  # add this too
-from fastapi import FastAPI, Request
+import json
+from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
@@ -14,9 +12,9 @@ from aiogram.types import WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from config import *
-from database import run_migrations, SessionLocal
+from database import run_migrations, SessionLocal, get_db
 from utils import validate_init_data
-from models import Vendor
+from models import Vendor, Product
 
 from routes import admin, vendor, shop, custom
 
@@ -143,6 +141,32 @@ async def marketplace_webapp(request: Request):
 async def add_product_webapp(request: Request, file_id: str):
     return templates.TemplateResponse(request, "add_product.html", {"file_id": file_id})
 
+# === PUBLIC API ROUTES ===
+@app.get("/api/marketplace/products")
+async def get_marketplace_products():
+    """Public endpoint for customers to browse all products"""
+    try:
+        with SessionLocal() as db:
+            products = db.query(Product).join(Vendor).filter(
+                Vendor.is_active == True
+            ).all()
+            
+            result = []
+            for p in products:
+                result.append({
+                    "id": p.id,
+                    "title": p.title,
+                    "price": float(p.price),
+                    "quantity": getattr(p, 'quantity', 1),
+                    "telegram_file_id": getattr(p, 'telegram_file_id', None),
+                    "vendor_id": p.vendor.vendor_id,
+                    "vendor_name": p.vendor.business_name
+                })
+            return result
+    except Exception as e:
+        logger.error(f"Marketplace products error: {e}")
+        return []
+
 # === STARTUP ===
 @app.on_event("startup")
 async def on_startup():
@@ -160,166 +184,3 @@ async def telegram_webhook(request: Request):
 @app.get("/")
 async def root():
     return {"status": "Business Hub Engine Running"}
-
-@app.get("/api/marketplace/products")
-async def get_marketplace_products():
-    """Public endpoint for customers to browse all products"""
-    try:
-        with SessionLocal() as db:
-            products = db.query(Product).join(Vendor).filter(
-                Vendor.is_active == True
-            ).all()
-            
-            result = []
-            for p in products:
-                result.append({
-                    "id": p.id,
-                    "title": p.title,
-                    "price": float(p.price),
-                    "quantity": getattr(p, 'quantity', 1),  # defaults to 1 if column missing
-                    "telegram_file_id": getattr(p, 'telegram_file_id', None),
-                    "vendor_id": p.vendor.vendor_id,
-                    "vendor_name": p.vendor.business_name
-                })
-            return result
-    except Exception as e:
-        logger.error(f"Marketplace products error: {e}")
-        return []
-        
-@app.post("/api/orders/create")
-async def create_order(request: Request):
-    init_data = request.headers.get("X-Telegram-Init-Data")
-    if not init_data or not validate_init_data(init_data, BOT_TOKEN):
-        raise HTTPException(401)
-
-    user = parse_user(init_data)
-    data = await request.json()
-
-    conn = get_db()
-    cur = conn.cursor()
-
-    # Group items by vendor
-    vendors = {}
-    total = 0
-    for item in data['items']:
-        cur.execute("SELECT vendor_id, price, title FROM products WHERE id =?", (item['product_id'],))
-        p = cur.fetchone()
-        if not p:
-            continue
-        vid = p['vendor_id']
-        if vid not in vendors:
-            vendors[vid] = {'items': [], 'total': 0}
-        item_total = item['price'] * item['quantity']
-        vendors[vid]['items'].append({
-            'title': p['title'],
-            'qty': item['quantity'],
-            'price': item['price'],
-            'total': item_total
-        })
-        vendors[vid]['total'] += item_total
-        total += item_total
-
-    # Create one order per vendor
-    for vid, vdata in vendors.items():
-        cur.execute("""
-            INSERT INTO orders (vendor_id, customer_id, customer_name, customer_phone,
-                              delivery_address, total_amount, items_json, status, created_at)
-            VALUES (?,?,?,?,?,?,?, 'pending', datetime('now'))
-        """, (vid, user['id'], data['customer_name'], data['customer_phone'],
-              data['delivery_address'], vdata['total'], json.dumps(vdata['items'])))
-
-        order_id = cur.lastrowid
-
-        # Notify vendor via bot
-        cur.execute("SELECT telegram_id, business_name FROM vendors WHERE id =?", (vid,))
-        vendor = cur.fetchone()
-        if vendor:
-            items_text = "\n".join([f"• {i['qty']}x {i['title']} — ₦{i['total']:,}" for i in vdata['items']])
-            msg = f"""🎉 New Order #{order_id}
-
-Customer: {data['customer_name']}
-Phone: {data['customer_phone']}
-Address: {data['delivery_address']}
-
-Items:
-{items_text}
-
-Total: ₦{vdata['total']:,}
-
-Customer will pay you directly. Confirm payment then mark as delivered in your dashboard."""
-
-            try:
-                await bot.send_message(vendor['telegram_id'], msg)
-            except Exception as e:
-                print(f"Failed to notify vendor: {e}")
-
-    conn.commit()
-    conn.close()
-    return {"success": True}
-    
-@app.get("/api/vendor/products")
-async def get_vendor_products(request: Request):
-    init_data = request.headers.get("X-Telegram-Init-Data")
-    user = validate_init_data(init_data)
-    if not user:
-        raise HTTPException(401, "Unauthorized")
-    
-    logger.info(f"Vendor {user['id']} requesting products")
-    
-    with SessionLocal() as db:
-        products = db.query(Product).filter(Product.vendor_id == user['id']).all()
-        logger.info(f"Found {len(products)} products for vendor {user['id']}")
-        
-        return [
-            {
-                "id": p.id,
-                "title": p.title,
-                "price": float(p.price),
-                "quantity": p.quantity,
-                "is_active": p.is_active,
-                "telegram_file_id": p.telegram_file_id
-            }
-            for p in products
-        ]
-
-@app.get("/api/vendor/me")
-async def get_vendor_me(request: Request):
-    init_data = request.headers.get("X-Telegram-Init-Data")
-    user = validate_init_data(init_data)
-    if not user:
-        raise HTTPException(401)
-    
-    with SessionLocal() as db:
-        vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
-        if not vendor:
-            raise HTTPException(404, "Vendor not found")
-        
-        from datetime import datetime
-        days_left = 0
-        if vendor.subscription_expiry:
-            days_left = (vendor.subscription_expiry - datetime.now(vendor.subscription_expiry.tzinfo)).days
-        
-        return {
-            "vendor_id": vendor.vendor_id,
-            "business_name": vendor.business_name,
-            "days_left": max(0, days_left),
-            "on_trial": vendor.commission_waived
-        }
-        
-@app.delete("/api/products/{product_id}")
-async def delete_product(product_id: int, request: Request):
-    init_data = request.headers.get("X-Telegram-Init-Data")
-    user = validate_init_data(init_data)
-    if not user:
-        raise HTTPException(401)
-    
-    with SessionLocal() as db:
-        product = db.query(Product).filter(Product.id == product_id).first()
-        if not product:
-            raise HTTPException(404)
-        if product.vendor_id != user['id']:
-            raise HTTPException(403)
-        
-        db.delete(product)
-        db.commit()
-    return {"success": True}
