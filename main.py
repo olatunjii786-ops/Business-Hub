@@ -162,23 +162,21 @@ async def root():
 
 @app.get("/api/marketplace/products")
 async def get_marketplace_products():
-    """Public endpoint for customers to browse all active products"""
+    """Public endpoint for customers to browse all products"""
     try:
         with SessionLocal() as db:
             products = db.query(Product).join(Vendor).filter(
-                Product.is_active == True,
-                Product.quantity > 0,
                 Vendor.is_active == True
             ).all()
             
             result = []
             for p in products:
                 result.append({
-                    "id": p.product_id,
+                    "id": p.id,
                     "title": p.title,
-                    "price": p.price,
-                    "quantity": p.quantity,
-                    "telegram_file_id": p.telegram_file_id,
+                    "price": float(p.price),
+                    "quantity": getattr(p, 'quantity', 1),  # defaults to 1 if column missing
+                    "telegram_file_id": getattr(p, 'telegram_file_id', None),
                     "vendor_id": p.vendor.vendor_id,
                     "vendor_name": p.vendor.business_name
                 })
@@ -186,7 +184,7 @@ async def get_marketplace_products():
     except Exception as e:
         logger.error(f"Marketplace products error: {e}")
         return []
-
+        
 @app.post("/api/orders/create")
 async def create_order(request: Request):
     init_data = request.headers.get("X-Telegram-Init-Data")
