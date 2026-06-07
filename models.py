@@ -1,5 +1,6 @@
-from sqlalchemy import Column, BIGINT, VARCHAR, BOOLEAN, TIMESTAMP, NUMERIC, TEXT, ForeignKey, Integer, func
+from sqlalchemy import Column, BIGINT, VARCHAR, BOOLEAN, TIMESTAMP, NUMERIC, TEXT, ForeignKey, Integer, func, String, DateTime
 from sqlalchemy.orm import relationship, declarative_base
+from datetime import datetime
 
 Base = declarative_base()
 
@@ -7,8 +8,8 @@ class Vendor(Base):
     __tablename__ = "vendors"
     vendor_id = Column(BIGINT, primary_key=True)
     business_name = Column(VARCHAR(255), unique=True, nullable=False)
-    business_description = Column(TEXT, default="") # NEW
-    logo_file_id = Column(VARCHAR(255)) # NEW - Telegram file_id
+    business_description = Column(TEXT, default="")
+    logo_file_id = Column(VARCHAR(255))
     phone_number = Column(VARCHAR(20))
     bank_name = Column(VARCHAR(100))
     account_number = Column(VARCHAR(10))
@@ -22,13 +23,13 @@ class Vendor(Base):
 class Product(Base):
     __tablename__ = "products"
     id = Column(Integer, primary_key=True)
-    vendor_id = Column(BigInteger, ForeignKey("vendors.vendor_id"))
+    vendor_id = Column(BIGINT, ForeignKey("vendors.vendor_id"))  # Changed BigInteger -> BIGINT
     title = Column(String, nullable=False)
-    price = Column(Numeric(10, 2), nullable=False)
-    quantity = Column(Integer, default=1)  # add this
-    is_active = Column(Boolean, default=True)  # add this
+    price = Column(NUMERIC(10, 2), nullable=False)
+    quantity = Column(Integer, default=1)
+    is_active = Column(BOOLEAN, default=True)  # Changed Boolean -> BOOLEAN for consistency
     telegram_file_id = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)  # Now DateTime is imported
     vendor = relationship("Vendor", back_populates="products")
     
 class Order(Base):
@@ -42,6 +43,6 @@ class Order(Base):
     total_amount = Column(NUMERIC(10, 2))
     commission = Column(NUMERIC(10, 2))
     paystack_reference = Column(VARCHAR(255), unique=True)
-    status = Column(VARCHAR(50), default="pending")  # MISSING - ADDED
+    status = Column(VARCHAR(50), default="pending")
     created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
     vendor = relationship("Vendor", back_populates="orders")
