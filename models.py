@@ -21,19 +21,16 @@ class Vendor(Base):
 
 class Product(Base):
     __tablename__ = "products"
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    vendor_id = Column(BIGINT, ForeignKey("vendors.vendor_id"))
-    title = Column(VARCHAR(255), nullable=False)
-    description = Column(TEXT, default="")
-    price = Column(NUMERIC(10, 2), nullable=False)
-    quantity = Column(Integer, default=0)
-    sizes = Column(VARCHAR(255), default="One Size")
-    telegram_file_id = Column(VARCHAR(255))
-    is_active = Column(BOOLEAN, default=True)
-    is_deleted = Column(BOOLEAN, default=False)
-    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    id = Column(Integer, primary_key=True)
+    vendor_id = Column(BigInteger, ForeignKey("vendors.vendor_id"))
+    title = Column(String, nullable=False)
+    price = Column(Numeric(10, 2), nullable=False)
+    quantity = Column(Integer, default=1)  # add this
+    is_active = Column(Boolean, default=True)  # add this
+    telegram_file_id = Column(String)
+    created_at = Column(DateTime, default=datetime.utcnow)
     vendor = relationship("Vendor", back_populates="products")
-
+    
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, autoincrement=True)
