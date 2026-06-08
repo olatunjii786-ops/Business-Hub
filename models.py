@@ -1,6 +1,7 @@
-from sqlalchemy import Column, BIGINT, VARCHAR, BOOLEAN, TIMESTAMP, NUMERIC, TEXT, ForeignKey, Integer, func, String, DateTime
-from sqlalchemy.orm import relationship, declarative_base
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, ForeignKey, Text
+from sqlalchemy.orm import relationship
+from database import Base
+from datetime import datetime, timezone
 
 Base = declarative_base()
 
@@ -26,12 +27,12 @@ class Product(Base):
     id = Column(Integer, primary_key=True, index=True)
     vendor_id = Column(Integer, ForeignKey("vendors.vendor_id"), nullable=False)
     title = Column(String(200), nullable=False)
-    description = Column(Text, default="") # ADDED
+    description = Column(Text, default="")
     price = Column(Float, nullable=False)
-    quantity = Column(Integer, default=1) # ADDED
-    sizes = Column(String(500), default="") # ADDED
-    telegram_file_id = Column(String(500)) # ADDED
-    is_active = Column(Boolean, default=True) # ADDED
+    quantity = Column(Integer, default=1)
+    sizes = Column(String(500), default="")
+    telegram_file_id = Column(String(500))
+    is_active = Column(Boolean, default=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     
     vendor = relationship("Vendor", back_populates="products")
