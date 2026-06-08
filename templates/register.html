@@ -7,68 +7,121 @@
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
+        body {
             font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', Roboto, sans-serif;
             background: var(--tg-theme-bg-color, #0f0f0f);
             color: var(--tg-theme-text-color, #fff);
             -webkit-font-smoothing: antialiased;
             overflow-x: hidden;
         }
-        .container { padding: 24px 20px 40px; max-width: 500px; margin: 0 auto; }
-        .hero { text-align: center; padding: 40px 0; position: relative; }
-        .hero-bg {
+      .container { padding: 24px 20px 40px; max-width: 500px; margin: 0 auto; }
+      .hero { text-align: center; padding: 40px 0; position: relative; }
+      .hero-bg {
             position: absolute; top: 0; left: 50%; transform: translateX(-50%);
             width: 300px; height: 300px; border-radius: 50%;
             background: radial-gradient(circle, rgba(16,185,129,0.2) 0%, transparent 70%);
             animation: pulse 3s ease-in-out infinite; z-index: 0;
         }
         @keyframes pulse { 0%, 100% { transform: translateX(-50%) scale(1); opacity: 0.5; } 50% { transform: translateX(-50%) scale(1.1); opacity: 0.8; } }
-        .hero-content { position: relative; z-index: 1; animation: fadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      .hero-content { position: relative; z-index: 1; animation: fadeInUp 0.8s cubic-bezier(0.34, 1.56, 0.64, 1); }
         @keyframes fadeInUp { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
-        .badge { 
+      .badge {
             display: inline-block; background: linear-gradient(135deg, #10b981, #059669);
-            color: white; padding: 8px 18px; border-radius: 24px; font-size: 13px; 
+            color: white; padding: 8px 18px; border-radius: 24px; font-size: 13px;
             font-weight: 700; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(16,185,129,0.4);
         }
-        .hero-icon { font-size: 72px; margin-bottom: 16px; animation: float 3s ease-in-out infinite; }
+      .hero-icon { font-size: 72px; margin-bottom: 16px; animation: float 3s ease-in-out infinite; }
         @keyframes float { 0%, 100% { transform: translateY(0) rotate(0deg); } 50% { transform: translateY(-10px) rotate(5deg); } }
-        .hero h1 { font-size: 38px; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 12px; }
-        .hero p { opacity: 0.7; font-size: 17px; line-height: 1.5; }
-        .form { animation: fadeIn 1s ease 0.3s backwards; }
+      .hero h1 { font-size: 38px; font-weight: 800; letter-spacing: -1.5px; margin-bottom: 12px; }
+      .hero p { opacity: 0.7; font-size: 17px; line-height: 1.5; }
+      .form { animation: fadeIn 1s ease 0.3s backwards; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .form-group { margin-bottom: 24px; }
+
+      .logo-upload {
+            display: flex;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+      .logo-circle {
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
+            border: 2px dashed var(--tg-theme-hint-color, #444);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.2s;
+        }
+      .logo-circle:active { transform: scale(0.95); }
+      .logo-circle.has-image { border-style: solid; border-color: var(--tg-theme-button-color, #10b981); }
+      .logo-circle img { width: 100%; height: 100%; object-fit: cover; }
+      .plus-icon {
+            font-size: 32px;
+            color: var(--tg-theme-hint-color, #666);
+            pointer-events: none;
+        }
+      .logo-label {
+            text-align: center;
+            font-size: 13px;
+            color: var(--tg-theme-hint-color, #8b8b8b);
+            margin-top: 8px;
+        }
+        #logo-input { display: none; }
+      .uploading {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.7);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+        }
+
+      .form-group { margin-bottom: 24px; }
         label { display: block; margin-bottom: 10px; font-weight: 600; font-size: 15px; opacity: 0.9; }
-        input, select { 
-            width: 100%; padding: 18px; border: 2px solid rgba(255,255,255,0.1); 
+        input, select, textarea {
+            width: 100%; padding: 18px; border: 2px solid rgba(255,255,255,0.1);
             border-radius: 16px; font-size: 16px; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
             background: rgba(255,255,255,0.05); backdrop-filter: blur(10px);
-            color: var(--tg-theme-text-color, #fff); -webkit-appearance: none;
+            color: var(--tg-theme-text-color, #fff); -webkit-appearance: none; font-family: inherit;
         }
-        input::placeholder { color: rgba(255,255,255,0.3); }
-        input:focus, select:focus { 
+        textarea { resize: vertical; min-height: 80px; }
+        input::placeholder, textarea::placeholder { color: rgba(255,255,255,0.3); }
+        input:focus, select:focus, textarea:focus {
             outline: none; border-color: #10b981; background: rgba(16,185,129,0.1);
             transform: scale(1.02); box-shadow: 0 0 0 4px rgba(16,185,129,0.1);
         }
         select option { background: #1a1a1a; color: #fff; }
-        .error { color: #ef4444; font-size: 13px; margin-top: 8px; display: none; animation: shake 0.4s; }
+      .char-count {
+            font-size: 12px;
+            color: var(--tg-theme-hint-color, #8b8b8b);
+            text-align: right;
+            margin-top: 4px;
+        }
+      .error { color: #ef4444; font-size: 13px; margin-top: 8px; display: none; animation: shake 0.4s; }
         @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
-        .error.show { display: block; }
-        .global-error {
+      .error.show { display: block; }
+      .global-error {
             background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3);
             border-radius: 16px; padding: 16px; margin-bottom: 20px; display: none;
             animation: fadeIn 0.3s;
         }
-        .global-error.show { display: block; }
-        .footer { text-align: center; font-size: 13px; opacity: 0.4; margin-top: 40px; }
-        .success-overlay {
+      .global-error.show { display: block; }
+      .footer { text-align: center; font-size: 13px; opacity: 0.4; margin-top: 40px; }
+      .success-overlay {
             position: fixed; inset: 0; background: rgba(0,0,0,0.9);
             display: none; align-items: center; justify-content: center;
             z-index: 1000; animation: fadeIn 0.3s;
         }
-        .success-overlay.show { display: flex; }
-        .success-box { text-align: center; animation: successPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      .success-overlay.show { display: flex; }
+      .success-box { text-align: center; animation: successPop 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
         @keyframes successPop { from { opacity: 0; transform: scale(0.5); } to { opacity: 1; transform: scale(1); } }
-        .success-icon { font-size: 80px; margin-bottom: 20px; animation: bounce 0.6s; }
+      .success-icon { font-size: 80px; margin-bottom: 20px; animation: bounce 0.6s; }
         @keyframes bounce { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.2); } }
     </style>
 </head>
@@ -87,18 +140,38 @@
         <div class="global-error" id="global_error"></div>
 
         <form class="form" id="form">
+            <div class="logo-upload">
+                <div>
+                    <label for="logo-input">
+                        <div class="logo-circle" id="logo-circle">
+                            <span class="plus-icon" id="plus-icon">+</span>
+                            <img id="logo-preview" style="display: none;">
+                            <div class="uploading" id="uploading" style="display: none;">Uploading...</div>
+                        </div>
+                    </label>
+                    <input type="file" id="logo-input" accept="image/*" onchange="handleLogoUpload(event)">
+                    <div class="logo-label">Store Logo (Optional)</div>
+                </div>
+            </div>
+
             <div class="form-group">
                 <label>Business Name</label>
                 <input type="text" id="business_name" placeholder="e.g. Amara's Fashion Hub" required maxlength="100">
                 <div class="error" id="name_error"></div>
             </div>
-            
+
+            <div class="form-group">
+                <label>Bio</label>
+                <textarea id="business_description" placeholder="Tell customers about your store..." maxlength="500" oninput="updateCharCount()"></textarea>
+                <div class="char-count"><span id="char-count">0</span>/500</div>
+            </div>
+
             <div class="form-group">
                 <label>WhatsApp Number</label>
                 <input type="tel" id="phone_number" placeholder="08012345678" required>
                 <div class="error" id="phone_error"></div>
             </div>
-            
+
             <div class="form-group">
                 <label>Bank for Payouts</label>
                 <select id="bank_name" required>
@@ -115,14 +188,14 @@
                 </select>
                 <div class="error" id="bank_error"></div>
             </div>
-            
+
             <div class="form-group">
                 <label>Account Number</label>
                 <input type="text" id="account_number" placeholder="0123456789" required maxlength="10" pattern="[0-9]{10}">
                 <div class="error" id="account_error"></div>
             </div>
         </form>
-        
+
         <div class="footer">By continuing, you agree to our Terms</div>
     </div>
 
@@ -142,6 +215,70 @@
     tg.MainButton.setText('START 7-DAY FREE TRIAL').show();
     tg.MainButton.color = '#10b981';
 
+    let logoFileId = null;
+
+    function updateCharCount() {
+        const bio = document.getElementById('business_description');
+        document.getElementById('char-count').textContent = bio.value.length;
+    }
+
+    async function handleLogoUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        if (!file.type.startsWith('image/')) {
+            tg.showAlert('Please select an image file');
+            return;
+        }
+        if (file.size > 5 * 1024 * 1024) {
+            tg.showAlert('Image too large. Max 5MB');
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            document.getElementById('logo-preview').src = e.target.result;
+            document.getElementById('logo-preview').style.display = 'block';
+            document.getElementById('plus-icon').style.display = 'none';
+            document.getElementById('logo-circle').classList.add('has-image');
+        };
+        reader.readAsDataURL(file);
+
+        document.getElementById('uploading').style.display = 'flex';
+        const formData = new FormData();
+        formData.append('file', file);
+
+        try {
+            const res = await fetch('/api/vendor/upload-logo', {
+                method: 'POST',
+                headers: { 'X-Telegram-Init-Data': tg.initData },
+                body: formData
+            });
+
+            const data = await res.json();
+            if (res.ok) {
+                logoFileId = data.file_id;
+                tg.HapticFeedback.notificationOccurred('success');
+            } else {
+                tg.showAlert(data.detail || 'Upload failed');
+                resetLogo();
+            }
+        } catch (e) {
+            tg.showAlert('Upload failed. Try again.');
+            resetLogo();
+        } finally {
+            document.getElementById('uploading').style.display = 'none';
+        }
+    }
+
+    function resetLogo() {
+        document.getElementById('logo-preview').style.display = 'none';
+        document.getElementById('plus-icon').style.display = 'block';
+        document.getElementById('logo-circle').classList.remove('has-image');
+        document.getElementById('logo-input').value = '';
+        logoFileId = null;
+    }
+
     function showError(field, msg) {
         if (field === 'global') {
             const el = document.getElementById('global_error');
@@ -154,20 +291,22 @@
         }
         tg.HapticFeedback.notificationOccurred('error');
         setTimeout(() => {
-            document.querySelectorAll('.error, .global-error').forEach(e => e.classList.remove('show'));
+            document.querySelectorAll('.error,.global-error').forEach(e => e.classList.remove('show'));
         }, 4000);
     }
 
     tg.MainButton.onClick(async () => {
-        document.querySelectorAll('.error, .global-error').forEach(e => e.classList.remove('show'));
-        
+        document.querySelectorAll('.error,.global-error').forEach(e => e.classList.remove('show'));
+
         const data = {
             business_name: document.getElementById('business_name').value.trim(),
+            business_description: document.getElementById('business_description').value.trim(),
             phone_number: document.getElementById('phone_number').value.trim(),
             bank_name: document.getElementById('bank_name').value,
-            account_number: document.getElementById('account_number').value.trim()
+            account_number: document.getElementById('account_number').value.trim(),
+            logo_file_id: logoFileId
         };
-        
+
         if (!data.business_name || data.business_name.length < 3) {
             showError('name', 'Business name must be at least 3 characters');
             return;
@@ -190,26 +329,26 @@
         try {
             const res = await fetch(`/api/vendor/register/${tg.initDataUnsafe.user.id}`, {
                 method: 'POST',
-                headers: { 
+                headers: {
                     'Content-Type': 'application/json',
-                    'X-Telegram-Init-Data': tg.initData // Added auth header
+                    'X-Telegram-Init-Data': tg.initData
                 },
                 body: JSON.stringify(data)
             });
-            
+
             const result = await res.json();
-            
+
             if (!res.ok) {
                 throw new Error(result.detail || 'Registration failed');
             }
-            
+
             tg.HapticFeedback.notificationOccurred('success');
             document.getElementById('success').classList.add('show');
             if (result.warning) {
                 setTimeout(() => tg.showAlert(result.warning), 500);
             }
             setTimeout(() => tg.close(), 2000);
-            
+
         } catch (e) {
             tg.HapticFeedback.notificationOccurred('error');
             if (e.message.includes('already taken')) {
@@ -228,4 +367,4 @@
     });
 </script>
 </body>
-            </html>
+    </html>
