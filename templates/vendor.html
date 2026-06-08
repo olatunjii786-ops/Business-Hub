@@ -400,17 +400,19 @@
                 if (!confirmed) return;
                 tg.HapticFeedback.notificationOccurred('warning');
                 try {
-                    const res = await fetch(`/api/products/${id}`, {
+                    const res = await fetch(`/api/vendor/products/${id}`, {
                         method: 'DELETE',
                         headers: { 'X-Telegram-Init-Data': tg.initData }
                     });
-                    if (res.ok) {
+                    const data = await res.json();
+                    if (res.ok && data.success) {
                         tg.HapticFeedback.notificationOccurred('success');
                         await loadProducts();
                     } else {
-                        tg.showAlert('Failed to delete');
+                        tg.showAlert(data.detail || 'Failed to delete');
                     }
                 } catch (e) {
+                    console.error('Delete error:', e);
                     tg.showAlert('Network error');
                 }
             });
