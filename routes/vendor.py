@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException, UploadFile, File
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from datetime import datetime, timedelta, timezone
@@ -6,11 +6,13 @@ from typing import Optional
 import json
 import httpx
 import logging
+import uuid
+import os
 from pydantic import BaseModel
 from database import get_db
 from models import Vendor, Product, Order
 from utils import validate_init_data
-from config import PAYSTACK_SECRET_KEY, ENABLE_PAYSTACK, TRIAL_DAYS
+from config import PAYSTACK_SECRET_KEY, ENABLE_PAYSTACK, TRIAL_DAYS, BOT_TOKEN
 
 router = APIRouter(prefix="/api/vendor", tags=["vendor"])
 logger = logging.getLogger(__name__)
@@ -30,6 +32,51 @@ class ProductCreate(BaseModel):
     price: float
     quantity: int
     sizes: str = ""
+
+@router.post("/upload-logo")
+async def upload_logo(request: Request, file: UploadFile = File(...), db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+
+    if not file.content_type.startswith('image/'):
+        raise HTTPException(400, "Only images allowed")
+
+    content = await file.read()
+    if len(content) > 5 * 1024 * 1024: # 5MB
+        raise HTTPException(400, "Image too large. Max 5MB")
+
+    temp_filename = f"/tmp/{uuid.uuid4()}.jpg"
+    with open(temp_filename, "wb") as f:
+        f.write(content)
+
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            with open(temp_filename, "rb") as f:
+                files = {"photo": (file.filename, f, file.content_type)}
+                res = await client.post(
+                    f"https://api.telegram.org/bot{BOT_TOKEN}/sendPhoto",
+                    data={"chat_id": user['id'], "disable_notification": True},
+                    files=files
+                )
+
+        if res.status_code == 200:
+            data = res.json()
+            file_id = data["result"]["photo"][-1]["file_id"]
+            msg_id = data["result"]["message_id"]
+            # Delete message to keep chat clean
+            await client.post(
+                f"https://api.telegram.org/bot{BOT_TOKEN}/deleteMessage",
+                json={"chat_id": user['id'], "message_id": msg_id}
+            )
+            return {"file_id": file_id}
+        else:
+            logger.error(f"Telegram upload failed: {res.text}")
+            raise HTTPException(500, "Failed to upload to Telegram")
+    finally:
+        if os.path.exists(temp_filename):
+            os.remove(temp_filename)
 
 @router.get("/me")
 async def get_vendor_me(request: Request, db: Session = Depends(get_db)):
@@ -66,21 +113,21 @@ async def register_vendor(telegram_id: int, data: VendorReg, request: Request, d
     user = validate_init_data(init_data)
     if not user or user['id']!= telegram_id:
         raise HTTPException(403, "Cannot register for another user")
-    
+
     logger.info(f"Registration attempt for {telegram_id}: {data.business_name}")
-    
+
     existing = db.query(Vendor).filter(Vendor.vendor_id == telegram_id).first()
     if existing:
         raise HTTPException(400, "You already have a registered business")
-    
+
     clean_name = data.business_name.strip()
     name_exists = db.query(Vendor).filter(func.lower(Vendor.business_name) == clean_name.lower()).first()
     if name_exists:
         raise HTTPException(400, "Business name already taken. Try another one")
-    
+
     subaccount = None
     paystack_error = None
-    
+
     if ENABLE_PAYSTACK:
         try:
             async with httpx.AsyncClient() as client:
@@ -106,7 +153,7 @@ async def register_vendor(telegram_id: int, data: VendorReg, request: Request, d
     vendor = Vendor(
         vendor_id=telegram_id,
         business_name=clean_name,
-        business_description=data.business_description.strip()[:500],
+        business_description=data.business_description.strip()[:500] if data.business_description else "",
         logo_file_id=data.logo_file_id,
         phone_number=data.phone_number.strip(),
         bank_name=data.bank_name,
@@ -118,7 +165,7 @@ async def register_vendor(telegram_id: int, data: VendorReg, request: Request, d
     )
     db.add(vendor)
     db.commit()
-    
+
     response = {"status": "success", "trial_days": TRIAL_DAYS}
     if paystack_error:
         response["warning"] = f"Registered but payout setup pending: {paystack_error}"
@@ -136,7 +183,7 @@ async def get_my_products(request: Request, db: Session = Depends(get_db)):
 
     products = db.query(Product).filter(Product.vendor_id == user_id).order_by(Product.created_at.desc()).all()
     logger.info(f"Found {len(products)} products for vendor {user_id}")
-    
+
     return [{
         "id": p.id,
         "title": p.title,
@@ -184,7 +231,7 @@ async def toggle_product(product_id: int, request: Request, db: Session = Depend
     product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
     if not product:
         raise HTTPException(404, "Product not found")
-    
+
     product.is_active = not product.is_active
     db.commit()
     return {"status": "toggled", "is_active": product.is_active}
@@ -199,10 +246,10 @@ async def delete_product(product_id: int, request: Request, db: Session = Depend
     product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
     if not product:
         raise HTTPException(404, "Product not found")
-    
+
     db.delete(product)
     db.commit()
-    return {"status": "deleted"}
+    return {"success": True}
 
 @router.get("/orders")
 async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
@@ -215,7 +262,7 @@ async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
         Order.vendor_id == user['id'],
         Order.status.in_(["paid", "delivered"])
     ).order_by(Order.created_at.desc()).limit(50).all()
-    
+
     return [{
         "id": o.id,
         "customer_name": o.customer_name,
@@ -238,13 +285,13 @@ async def mark_delivered(order_id: int, request: Request, db: Session = Depends(
     order = db.query(Order).filter(Order.id == order_id, Order.vendor_id == user['id']).first()
     if not order:
         raise HTTPException(404, "Order not found")
-    
+
     if order.status == "delivered":
         raise HTTPException(400, "Already delivered")
-        
+
     order.status = "delivered"
     db.commit()
-    
+
     return {"status": "marked_delivered"}
 
 # PUBLIC ENDPOINTS FOR CUSTOMER MARKETPLACE
@@ -264,7 +311,7 @@ async def get_public_products(vendor_id: Optional[int] = None, db: Session = Dep
     query = db.query(Product).filter(Product.is_active == True, Product.quantity > 0)
     if vendor_id:
         query = query.filter(Product.vendor_id == vendor_id)
-    
+
     products = query.order_by(Product.created_at.desc()).limit(100).all()
     return [{
         "id": p.id,
