@@ -2,585 +2,510 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>Vendor Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Business Hub — Vendor Console</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
+        :root {
+            --accent: var(--tg-theme-button-color, #007aff);
+            --accent-text: var(--tg-theme-button-text-color, #ffffff);
+            --bg: var(--tg-theme-bg-color, #f5f5f7);
+            --card-bg: var(--tg-theme-secondary-bg-color, #ffffff);
+            --text: var(--tg-theme-text-color, #1c1c1e);
+            --hint: var(--tg-theme-hint-color, #8e8e93);
+            --radius-lg: 20px;
+            --radius-md: 12px;
+            --transition: all 0.35s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: var(--tg-theme-bg-color, #0f0f23);
-            color: var(--tg-theme-text-color, #ffffff);
-            padding: 16px;
+            background-color: var(--bg);
+            color: var(--text);
             padding-bottom: 80px;
+            overflow-x: hidden;
         }
-       .header { margin-bottom: 24px; }
-       .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
-       .header p { color: var(--tg-theme-hint-color, #8b8b8b); font-size: 15px; }
-       .store-card {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border-radius: 20px;
-            padding: 20px;
-            margin-bottom: 24px;
-            position: relative;
-            overflow: hidden;
-        }
-       .store-card::before {
-            content: '';
-            position: absolute;
-            top: -50%;
-            right: -50%;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
-        }
-       .store-label { font-size: 13px; opacity: 0.9; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-       .store-link { font-size: 14px; font-weight: 600; word-break: break-all; margin-bottom: 16px; }
-       .share-btn {
-            background: rgba(255,255,255,0.2);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.3);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 12px;
-            font-size: 15px;
-            font-weight: 600;
-            width: 100%;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-       .share-btn:active { transform: scale(0.98); background: rgba(255,255,255,0.3); }
-       .trial-banner {
-            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-       .trial-text { font-size: 14px; font-weight: 600; }
-       .trial-days { font-size: 24px; font-weight: 700; }
-       .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-            margin-bottom: 24px;
-        }
-       .stat-card {
-            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
-            border-radius: 16px;
-            padding: 16px;
-        }
-       .stat-icon { font-size: 24px; margin-bottom: 8px; }
-       .stat-value { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
-       .stat-label { font-size: 13px; color: var(--tg-theme-hint-color, #8b8b8b); text-transform: uppercase; letter-spacing: 0.5px; }
-       .tabs {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 20px;
-            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
-            padding: 4px;
-            border-radius: 12px;
-        }
-       .tab {
-            flex: 1;
-            padding: 10px;
-            border: none;
-            background: transparent;
-            color: var(--tg-theme-hint-color, #8b8b8b);
-            border-radius: 8px;
-            font-size: 15px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-       .tab.active {
-            background: var(--tg-theme-button-color, #667eea);
-            color: var(--tg-theme-button-text-color, #ffffff);
-        }
-       .section-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 16px;
-        }
-       .section-title { font-size: 20px; font-weight: 700; }
-       .add-btn {
-            background: var(--tg-theme-button-color, #667eea);
-            color: var(--tg-theme-button-text-color, #ffffff);
-            border: none;
-            padding: 8px 16px;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-       .products-grid {
-            display: grid;
-            grid-template-columns: repeat(2, 1fr);
-            gap: 12px;
-        }
-       .card {
-            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
-            border-radius: 16px;
-            overflow: hidden;
-            position: relative;
-            animation: fadeIn 0.3s ease-out forwards;
-            opacity: 0;
-        }
-        @keyframes fadeIn {
-            from { opacity: 0; transform: translateY(10px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-       .delete-btn {
-            position: absolute;
-            top: 8px;
-            right: 8px;
-            width: 32px;
-            height: 32px;
-            border-radius: 10px;
-            background: rgba(245,87,108,0.95);
-            backdrop-filter: blur(10px);
-            border: none;
-            color: white;
-            font-size: 16px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 10;
-            transition: all 0.2s;
-        }
-       .delete-btn:active { transform: scale(0.9); }
-       .card-image {
-            width: 100%;
-            aspect-ratio: 1;
-            background: #2a2a3e;
-            position: relative;
-            overflow: hidden;
-        }
-       .card-image img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-       .stock-badge {
-            position: absolute;
-            top: 8px;
-            left: 8px;
-            background: rgba(0,0,0,0.7);
-            backdrop-filter: blur(10px);
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-       .stock-badge.low { background: rgba(255,193,7,0.9); color: #000; }
-       .stock-badge.out { background: rgba(245,87,108,0.9); color: #fff; }
-       .card-content { padding: 12px; }
-       .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-       .card-price { font-size: 16px; font-weight: 700; color: #38ef7d; }
-       .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-        }
-       .empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.3; }
-       .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-       .empty-text { color: var(--tg-theme-hint-color, #8b8b8b); font-size: 14px; }
-       .fab {
+
+        /* Splash Screen & Micro-Animations */
+        #splash-screen {
             position: fixed;
-            bottom: 24px;
-            right: 24px;
-            width: 56px;
-            height: 56px;
-            border-radius: 16px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            color: white;
-            font-size: 28px;
-            cursor: pointer;
-            box-shadow: 0 8px 24px rgba(102,126,234,0.4);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            z-index: 100;
-            transition: all 0.2s;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--bg);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 9999;
+            transition: var(--transition);
         }
-       .fab:active { transform: scale(0.95); }
-       .hidden { display: none !important; }
-       .order-card {
-            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
-            border-radius: 16px;
-            padding: 16px;
-            margin-bottom: 12px;
+        .shimmer-logo {
+            font-size: 28px; font-weight: 800; letter-spacing: -0.5px;
+            background: linear-gradient(90deg, var(--text) 0%, var(--hint) 50%, var(--text) 100%);
+            background-size: 200% auto;
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            animation: shimmer 2s linear infinite;
         }
-       .order-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            padding-bottom: 12px;
-            border-bottom: 1px solid rgba(255,255,255,0.1);
+        @keyframes shimmer { 0% { background-position: 0% center; } 100% { background-position: 200% center; } }
+
+        /* Navigation Systems */
+        .tab-bar {
+            display: flex; background: var(--card-bg); margin: 12px; padding: 4px;
+            border-radius: var(--radius-md); box-shadow: 0 4px 12px rgba(0,0,0,0.02);
         }
-       .order-code { font-size: 16px; font-weight: 700; }
-       .order-status {
-            padding: 4px 10px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
+        .tab-btn {
+            flex: 1; padding: 10px; border: none; background: transparent;
+            color: var(--hint); font-weight: 600; font-size: 14px;
+            border-radius: 8px; cursor: pointer; transition: var(--transition);
         }
-       .status-pending { background: rgba(255,193,7,0.2); color: #facc15; }
-       .status-paid_unconfirmed { background: rgba(59,130,246,0.2); color: #3b82f6; }
-       .status-paid_confirmed { background: rgba(16,185,129,0.2); color: #10b981; }
-       .status-delivered { background: rgba(139,92,246,0.2); color: #8b5cf6; }
-       .order-info { font-size: 14px; margin-bottom: 8px; opacity: 0.8; }
-       .order-items { font-size: 13px; margin: 12px 0; }
-       .order-item { display: flex; justify-content: space-between; margin-bottom: 4px; }
-       .order-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-top: 12px;
-            padding-top: 12px;
-            border-top: 1px solid rgba(255,255,255,0.1);
+        .tab-btn.active {
+            background: var(--accent); color: var(--accent-text);
         }
-       .order-total { font-size: 18px; font-weight: 700; color: #38ef7d; }
-       .order-actions { display: flex; gap: 8px; }
-       .order-btn {
-            padding: 8px 12px;
-            border-radius: 8px;
-            border: none;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
+
+        /* Container Frames */
+        .view-frame { display: none; padding: 0 12px; }
+        .view-frame.active { display: block; animation: fadeIn 0.4s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Merchant Header Block */
+        .profile-banner {
+            background: var(--card-bg); padding: 20px; border-radius: var(--radius-lg);
+            margin: 12px; display: flex; align-items: center; gap: 16px; position: relative;
         }
-       .btn-confirm { background: #10b981; color: white; }
-       .btn-deliver { background: #8b5cf6; color: white; }
+        .profile-logo {
+            width: 64px; height: 64px; border-radius: 50%; object-fit: cover;
+            border: 2px solid var(--accent); background: var(--bg);
+        }
+        .profile-details h2 { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
+        .profile-details p { font-size: 13px; color: var(--hint); line-height: 1.4; }
+        .share-btn {
+            position: absolute; top: 20px; right: 20px; border: none;
+            background: var(--bg); color: var(--accent); font-size: 12px;
+            font-weight: 600; padding: 6px 12px; border-radius: 20px;
+        }
+
+        /* Product Cards Layout grid */
+        .product-grid {
+            display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-top: 12px;
+        }
+        .add-card-trigger {
+            background: var(--card-bg); border: 2px dashed var(--hint);
+            border-radius: var(--radius-md); display: flex; flex-direction: column;
+            justify-content: center; align-items: center; min-height: 180px; gap: 8px; color: var(--accent);
+            font-weight: 600; font-size: 14px; cursor: pointer;
+        }
+        .item-card {
+            background: var(--card-bg); border-radius: var(--radius-md); overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.01); display: flex; flex-direction: column; position: relative;
+        }
+        .item-card img { width: 100%; height: 120px; object-fit: cover; background: var(--bg); }
+        .item-info { padding: 12px; flex: 1; display: flex; flex-direction: column; gap: 4px; }
+        .item-title { font-weight: 600; font-size: 14px; color: var(--text); }
+        .item-price { font-weight: 700; font-size: 15px; color: var(--accent); }
+        .item-meta { font-size: 11px; color: var(--hint); }
+        .item-actions { display: flex; border-top: 1px solid var(--bg); }
+        .act-btn {
+            flex: 1; border: none; background: transparent; padding: 8px;
+            font-size: 12px; font-weight: 600; cursor: pointer;
+        }
+        .act-btn.edit { color: var(--accent); border-right: 1px solid var(--bg); }
+        .act-btn.del { color: #ff3b30; }
+
+        /* Order Cards Styling */
+        .order-card {
+            background: var(--card-bg); border-radius: var(--radius-md); padding: 16px;
+            margin-bottom: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.01);
+        }
+        .order-header { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 13px; }
+        .order-code { font-weight: 700; color: var(--text); }
+        .order-status { font-weight: 600; padding: 2px 8px; border-radius: 12px; text-transform: uppercase; font-size: 10px; }
+        .status-pending { background: rgba(255,149,0,0.1); color: #ff9500; }
+        .status-confirmed { background: rgba(52,199,89,0.1); color: #34c759; }
+        .status-delivered { background: rgba(0,122,255,0.1); color: #007aff; }
+        .status-cancelled { background: rgba(255,59,48,0.1); color: #ff3b30; }
+        .order-items { font-size: 13px; color: var(--hint); margin-bottom: 10px; border-bottom: 1px dashed var(--bg); padding-bottom: 8px; }
+        .order-footer { display: flex; justify-content: space-between; align-items: center; }
+        .order-total { font-weight: 700; font-size: 16px; }
+        .control-select {
+            padding: 6px 12px; border-radius: 8px; border: 1px solid var(--bg);
+            background: var(--bg); color: var(--text); font-size: 12px; font-weight: 600;
+        }
+
+        /* Sliding Sheet Drawer Modals */
+        .sheet-drawer {
+            position: fixed; bottom: 0; left: 0; width: 100%; background: var(--card-bg);
+            border-top-left-radius: var(--radius-lg); border-top-right-radius: var(--radius-lg);
+            z-index: 5000; padding: 24px; transform: translateY(100%);
+            transition: var(--transition); box-shadow: 0 -8px 32px rgba(0,0,0,0.08);
+            max-height: 85vh; overflow-y: auto;
+        }
+        .sheet-drawer.open { transform: translateY(0); }
+        .sheet-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4);
+            z-index: 4000; display: none; opacity: 0; transition: opacity 0.35s ease;
+        }
+        .sheet-backdrop.open { display: block; opacity: 1; }
+
+        /* Unified Forms Input Mechanics */
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--hint); }
+        .form-control {
+            width: 100%; padding: 12px; border-radius: var(--radius-md); border: 1px solid var(--bg);
+            background: var(--bg); color: var(--text); font-size: 14px; transition: var(--transition);
+        }
+        .form-control:focus { border-color: var(--accent); outline: none; }
+        .inline-combo { display: flex; gap: 10px; }
+        .submit-btn {
+            width: 100%; padding: 14px; border: none; background: var(--accent);
+            color: var(--accent-text); border-radius: var(--radius-md); font-weight: 700;
+            font-size: 15px; margin-top: 10px; cursor: pointer;
+        }
+
+        /* Onboarding Screen Layout Container */
+        #onboarding-frame {
+            padding: 30px 20px; display: none; flex-direction: column; justify-content: center; min-height: 90vh;
+        }
+        .wizard-title { font-size: 26px; font-weight: 800; margin-bottom: 6px; letter-spacing: -0.5px; }
+        .wizard-subtitle { font-size: 14px; color: var(--hint); margin-bottom: 24px; line-height: 1.4; }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1 id="vendor-name">Hey 👋</h1>
-        <p>Here's your store today</p>
+
+    <div id="splash-screen">
+        <div class="shimmer-logo">BUSINESS HUB</div>
     </div>
 
-    <div class="store-card">
-        <div class="store-label">Your Store Link</div>
-        <div class="store-link" id="store-link">Loading...</div>
-        <button class="share-btn" onclick="shareStore()">Share Store Link</button>
+    <div id="onboarding-frame">
+        <h1 class="wizard-title">Create Your Boutique</h1>
+        <p class="wizard-subtitle">Set up your single-file automated store channel. Customers will redirect directly to your WhatsApp line to lock transactions.</p>
+        <form id="register-form" onsubmit="submitOnboarding(event)">
+            <div class="form-group">
+                <label>Business Logo (Gallery Upload)</label>
+                <input type="file" id="reg-logo" accept="image/*" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Business Name</label>
+                <input type="text" id="reg-name" placeholder="e.g. Iniesta Clothing & Bags" class="form-control" required>
+            </div>
+            <div class="form-group">
+                <label>Boutique Short Bio</label>
+                <textarea id="reg-bio" placeholder="Describe what you sell..." rows="3" class="form-control"></textarea>
+            </div>
+            <div class="form-group">
+                <label>WhatsApp Phone Line</label>
+                <input type="tel" id="reg-phone" placeholder="e.g. 08031234567" class="form-control" required>
+            </div>
+            <button type="submit" class="submit-btn">Launch Workspace Hub</button>
+        </form>
     </div>
 
-    <div class="trial-banner" id="trial-banner">
-        <div>
-            <div class="trial-text">Trial Period</div>
-            <div class="trial-days"><span id="trial-days">0</span> days left</div>
+    <div id="dashboard-frame" style="display:none;">
+        <div class="profile-banner">
+            <img src="" id="hub-logo" class="profile-logo" alt="Logo">
+            <div class="profile-details">
+                <h2 id="hub-name">Loading Brand...</h2>
+                <p id="hub-bio">Loading description parameters...</p>
+            </div>
+            <button class="share-btn" onclick="copyStorefrontLink()">Share Link</button>
         </div>
-        <div style="font-size: 32px;">🎁</div>
-    </div>
 
-    <div class="stats-grid">
-        <div class="stat-card">
-            <div class="stat-icon">💰</div>
-            <div class="stat-value">₦<span id="revenue">0</span></div>
-            <div class="stat-label">Revenue</div>
+        <div class="tab-bar">
+            <button class="tab-btn active" onclick="switchTab('inventory', this)">Inventory</button>
+            <button class="tab-btn" onclick="switchTab('orders', this)">Incoming Orders</button>
         </div>
-        <div class="stat-card">
-            <div class="stat-icon">📦</div>
-            <div class="stat-value" id="orders">0</div>
-            <div class="stat-label">Orders</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon">🎯</div>
-            <div class="stat-value" id="products-count">0</div>
-            <div class="stat-label">Products</div>
-        </div>
-        <div class="stat-card">
-            <div class="stat-icon">👁️</div>
-            <div class="stat-value" id="views">0</div>
-            <div class="stat-label">Views</div>
-        </div>
-    </div>
 
-    <div class="tabs">
-        <button class="tab active" onclick="switchTab('orders')">Orders</button>
-        <button class="tab" onclick="switchTab('products')">Products</button>
-        <button class="tab" onclick="switchTab('analytics')">Analytics</button>
-    </div>
-
-    <div id="orders-section">
-        <div id="orders-list"></div>
-        <div id="orders-empty" class="empty-state">
-            <div class="empty-icon">📋</div>
-            <div class="empty-title">No orders yet</div>
-            <div class="empty-text">Orders will appear here when customers buy</div>
+        <div id="inventory-view" class="view-frame active">
+            <div class="product-grid" id="products-container">
+                <div class="add-card-trigger" onclick="openProductDrawer()">
+                    <span style="font-size:24px;">+</span>
+                    <span>Add Product</span>
+                </div>
+            </div>
         </div>
-    </div>
 
-    <div id="products-section" class="hidden">
-        <div class="section-header">
-            <h2 class="section-title">Products</h2>
-            <button class="add-btn" onclick="addProduct()">
-                <span>+</span> Add Product
-            </button>
-        </div>
-        
-        <div id="products-grid" class="products-grid"></div>
-        
-        <div id="empty-state" class="empty-state">
-            <div class="empty-icon">📦</div>
-            <div class="empty-title">No products yet</div>
-            <div class="empty-text">Add your first product to start selling</div>
+        <div id="orders-view" class="view-frame">
+            <div id="orders-container"></div>
         </div>
     </div>
 
-    <div id="analytics-section" class="hidden">
-        <div class="empty-state">
-            <div class="empty-icon">📊</div>
-            <div class="empty-title">Analytics coming soon</div>
-            <div class="empty-text">Track your store performance</div>
-        </div>
+    <div class="sheet-backdrop" id="modal-backdrop" onclick="closeProductDrawer()"></div>
+    <div class="sheet-drawer" id="product-drawer">
+        <h3 id="modal-title" style="font-size:18px; font-weight:700; margin-bottom:16px;">Add New Product</h3>
+        <form id="product-form" onsubmit="submitProductForm(event)">
+            <input type="hidden" id="form-product-id">
+            <div class="form-group">
+                <label>Product Image File</label>
+                <input type="file" id="prod-image" accept="image/*" class="form-control">
+            </div>
+            <div class="form-group">
+                <label>Product Title Name</label>
+                <input type="text" id="prod-title" placeholder="e.g. Luxury Leather Bag" class="form-control" required>
+            </div>
+            <div class="form-group" class="inline-combo">
+                <div style="flex:1;">
+                    <label>Price (₦)</label>
+                    <input type="number" id="prod-price" placeholder="25000" class="form-control" required>
+                </div>
+                <div style="width:100px;">
+                    <label>Stock Qty</label>
+                    <input type="number" id="prod-qty" placeholder="5" value="5" class="form-control" required>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Category (Select or Type New)</label>
+                <input type="text" id="prod-category" list="category-options" placeholder="Clothing, Shoes, Bags..." class="form-control" required>
+                <datalist id="category-options">
+                    <option value="Clothing">
+                    <option value="Shoes">
+                    <option value="Bags">
+                    <option value="Accessories">
+                </datalist>
+            </div>
+            <div class="form-group">
+                <label>Available Sizes (Separate with commas)</label>
+                <input type="text" id="prod-sizes" placeholder="M, L, XL or 38, 39, 40" class="form-control">
+            </div>
+            <button type="submit" class="submit-btn" id="form-submit-text">Save Inventory Product</button>
+        </form>
     </div>
-
-    <button class="fab" onclick="addProduct()">+</button>
 
     <script>
         const tg = window.Telegram.WebApp;
         tg.expand();
         tg.ready();
-        
-        let vendorData = null;
 
-        async function init() {
-            await loadVendor();
-            await loadProducts();
-            await loadOrders();
+        let currentVendorLink = "";
+
+        // Verification validation fetch loop initialization
+        async def initConsole() {
+            try {
+                const res = await fetch("/api/vendor/me", {
+                    headers: { "X-Telegram-Init-Data": tg.initData }
+                });
+                const data = await res.json();
+                
+                document.getElementById("splash-screen").style.opacity = "0";
+                setTimeout(() => document.getElementById("splash-screen").style.display = "none", 350);
+
+                if (data.registered) {
+                    document.getElementById("dashboard-frame").style.display = "block";
+                    document.getElementById("hub-name").innerText = data.business_name;
+                    document.getElementById("hub-bio").innerText = data.bio || "No bio updated.";
+                    document.getElementById("hub-logo").src = data.logo_url || "";
+                    currentVendorLink = data.direct_link;
+                    
+                    loadProducts();
+                    loadOrders();
+                } else {
+                    document.getElementById("onboarding-frame").style.display = "flex";
+                }
+            } catch (err) {
+                console.error("Initialization breakdown state:", err);
+            }
         }
 
-        async function loadVendor() {
-            try {
-                const res = await fetch('/api/vendor/me', {
-                    headers: { 'X-Telegram-Init-Data': tg.initData }
-                });
-                if (!res.ok) throw new Error('Failed to load vendor');
-                
-                vendorData = await res.json();
-                document.getElementById('vendor-name').textContent = `Hey ${vendorData.business_name} 👋`;
-                document.getElementById('store-link').textContent = `t.me/isaacbusinessbot?start=shop_${vendorData.business_name.toLowerCase().replace(/\s+/g, '_')}`;
-                document.getElementById('trial-days').textContent = vendorData.days_left;
-                
-                if (vendorData.days_left <= 0) {
-                    document.getElementById('trial-banner').style.display = 'none';
-                }
-            } catch (e) {
-                console.error('loadVendor error:', e);
-                tg.showAlert('Failed to load vendor data');
-            }
+        function switchTab(viewName, element) {
+            document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+            document.querySelectorAll('.view-frame').forEach(f => f.classList.remove('active'));
+            
+            element.classList.add('active');
+            document.getElementById(`${viewName}-view`).classList.add('active');
+            tg.HapticFeedback.impactOccurred('light');
+        }
+
+        async function submitOnboarding(e) {
+            e.preventDefault();
+            tg.HapticFeedback.impactOccurred('medium');
+
+            const fd = new FormData();
+            fd.append("business_name", document.getElementById("reg-name").value);
+            fd.append("bio", document.getElementById("reg-bio").value);
+            fd.append("phone_number", document.getElementById("reg-phone").value);
+            
+            const fileInput = document.getElementById("reg-logo");
+            if (fileInput.files.length > 0) fd.append("logo", fileInput.files[0]);
+
+            const res = await fetch("/api/vendor/register", {
+                method: "POST",
+                headers: { "X-Telegram-Init-Data": tg.initData },
+                body: fd
+            });
+            const data = await res.json();
+            if (data.success) window.location.reload();
         }
 
         async function loadProducts() {
-            try {
-                const res = await fetch('/api/vendor/products', {
-                    headers: { 'X-Telegram-Init-Data': tg.initData }
-                });
-                
-                if (!res.ok) {
-                    console.error('Products API failed:', res.status);
-                    return;
-                }
-                
-                const products = await res.json();
-                const grid = document.getElementById('products-grid');
-                const emptyState = document.getElementById('empty-state');
-                
-                document.getElementById('products-count').textContent = products.length;
-                
-                if (products.length === 0) {
-                    emptyState.style.display = 'block';
-                    grid.style.display = 'none';
-                    return;
-                }
-                
-                emptyState.style.display = 'none';
-                grid.style.display = 'grid';
-                
-                grid.innerHTML = products.map((p, i) => {
-                    let stockBadge = '';
-                    if (p.quantity === 0) {
-                        stockBadge = '<div class="stock-badge out">Out of stock</div>';
-                    } else if (p.quantity <= 5) {
-                        stockBadge = `<div class="stock-badge low">Low: ${p.quantity}</div>`;
-                    }
-                    
-                    return `
-                        <div class="card" style="animation-delay: ${i * 0.05}s">
-                            <button class="delete-btn" onclick="deleteProduct(${p.id})">🗑️</button>
-                            <div class="card-image">
-                                <img src="/file/${p.telegram_file_id}" alt="${p.title}" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=\\'http://www.w3.org/2000/svg\\' width=\\'200\\' height=\\'200\\'%3E%3Crect fill=\\'%232a2a3e\\' width=\\'200\\' height=\\'200\\'/%3E%3C/svg%3E'">
-                                ${stockBadge}
-                            </div>
-                            <div class="card-content">
-                                <h3 class="card-title">${p.title}</h3>
-                                <p class="card-price">₦${p.price.toLocaleString()}</p>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
-                
-            } catch (e) {
-                console.error('loadProducts error:', e);
+            const res = await fetch("/api/vendor/products", {
+                headers: { "X-Telegram-Init-Data": tg.initData }
+            });
+            const products = await res.json();
+            
+            const container = document.getElementById("products-container");
+            // Clear all elements except the static first "Add Product" button trigger
+            container.innerHTML = `
+                <div class="add-card-trigger" onclick="openProductDrawer()">
+                    <span style="font-size:24px;">+</span>
+                    <span>Add Product</span>
+                </div>
+            `;
+
+            products.forEach(p => {
+                const card = document.createElement("div");
+                card.className = "item-card";
+                card.innerHTML = `
+                    <img src="${p.image_url || ''}" alt="Product">
+                    <div class="item-info">
+                        <span class="item-title">${p.title}</span>
+                        <span class="item-price">₦${p.price.toLocaleString()}</span>
+                        <span class="item-meta">Qty: ${p.quantity} | Tag: ${p.category}</span>
+                    </div>
+                    <div class="item-actions">
+                        <button class="act-btn edit" onclick='openEditMode(${JSON.stringify(p)})'>Edit</button>
+                        <button class="act-btn del" onclick="deleteProduct(${p.id})">Delete</button>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function openProductDrawer() {
+            document.getElementById("form-product-id").value = "";
+            document.getElementById("product-form").reset();
+            document.getElementById("modal-title").innerText = "Add New Product";
+            document.getElementById("form-submit-text").innerText = "Save Inventory Product";
+            
+            document.getElementById("modal-backdrop").classList.add("open");
+            document.getElementById("product-drawer").classList.add("open");
+        }
+
+        function closeProductDrawer() {
+            document.getElementById("modal-backdrop").classList.remove("open");
+            document.getElementById("product-drawer").classList.remove("open");
+        }
+
+        function openEditMode(p) {
+            document.getElementById("form-product-id").value = p.id;
+            document.getElementById("prod-title").value = p.title;
+            document.getElementById("prod-price").value = p.price;
+            document.getElementById("prod-qty").value = p.quantity;
+            document.getElementById("prod-category").value = p.category;
+            document.getElementById("prod-sizes").value = p.sizes || "";
+            
+            document.getElementById("modal-title").innerText = "Edit Inventory Product";
+            document.getElementById("form-submit-text").innerText = "Update Inventory Changes";
+
+            document.getElementById("modal-backdrop").classList.add("open");
+            document.getElementById("product-drawer").classList.add("open");
+        }
+
+        async function submitProductForm(e) {
+            e.preventDefault();
+            const pid = document.getElementById("form-product-id").value;
+            
+            const fd = new FormData();
+            fd.append("title", document.getElementById("prod-title").value);
+            fd.append("price", document.getElementById("prod-price").value);
+            fd.append("quantity", document.getElementById("prod-qty").value);
+            fd.append("category", document.getElementById("prod-category").value);
+            fd.append("sizes", document.getElementById("prod-sizes").value);
+
+            const imgFile = document.getElementById("prod-image").files[0];
+            if (imgFile) fd.append("image", imgFile);
+
+            const url = pid ? `/api/products/${pid}/edit` : "/api/products";
+            
+            const res = await fetch(url, {
+                method: "POST",
+                headers: { "X-Telegram-Init-Data": tg.initData },
+                body: fd
+            });
+            
+            if (res.ok) {
+                closeProductDrawer();
+                loadProducts();
+                tg.HapticFeedback.notificationOccurred('success');
             }
+        }
+
+        function deleteProduct(id) {
+            tg.showConfirm("Are you sure you want to remove this product entry?", async (yes) => {
+                if (yes) {
+                    const res = await fetch(`/api/products/${id}`, {
+                        method: "DELETE",
+                        headers: { "X-Telegram-Init-Data": tg.initData }
+                    });
+                    if (res.ok) {
+                        loadProducts();
+                        tg.HapticFeedback.notificationOccurred('success');
+                    }
+                }
+            });
         }
 
         async function loadOrders() {
-            try {
-                const res = await fetch('/api/vendor/orders', {
-                    headers: { 'X-Telegram-Init-Data': tg.initData }
-                });
+            const res = await fetch("/api/vendor/orders", {
+                headers: { "X-Telegram-Init-Data": tg.initData }
+            });
+            const orders = await res.json();
+            const container = document.getElementById("orders-container");
+            container.innerHTML = orders.length === 0 ? `<p style="text-align:center; padding:40px; color:var(--hint); font-size:14px;">No incoming customer orders yet.</p>` : "";
+
+            orders.forEach(o => {
+                const card = document.createElement("div");
+                card.className = "order-card";
                 
-                if (!res.ok) return;
+                let itemsSummaryText = o.items.map(i => `${i.quantity}x ${i.title} (${i.size})`).join(", ");
                 
-                const orders = await res.json();
-                const list = document.getElementById('orders-list');
-                const empty = document.getElementById('orders-empty');
-                
-                document.getElementById('orders').textContent = orders.length;
-                
-                const revenue = orders
-                    .filter(o => ['paid_confirmed', 'delivered'].includes(o.status))
-                    .reduce((sum, o) => sum + o.you_keep, 0);
-                document.getElementById('revenue').textContent = Math.floor(revenue).toLocaleString();
-                
-                if (orders.length === 0) {
-                    empty.style.display = 'block';
-                    list.style.display = 'none';
-                    return;
-                }
-                
-                empty.style.display = 'none';
-                list.style.display = 'block';
-                
-                list.innerHTML = orders.map(o => `
-                    <div class="order-card">
-                        <div class="order-header">
-                            <div class="order-code">${o.order_code}</div>
-                            <div class="order-status status-${o.status}">${o.status.replace('_', ' ')}</div>
-                        </div>
-                        <div class="order-info">👤 ${o.customer_name}</div>
-                        <div class="order-info">📞 ${o.customer_phone}</div>
-                        <div class="order-info">📍 ${o.delivery_address}</div>
-                        <div class="order-items">
-                            ${o.items.map(i => `
-                                <div class="order-item">
-                                    <span>${i.title} × ${i.quantity}</span>
-                                    <span>₦${(i.price * i.quantity).toLocaleString()}</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                        <div class="order-footer">
-                            <div class="order-total">₦${o.you_keep.toLocaleString()}</div>
-                            <div class="order-actions">
-                                ${o.status === 'pending' ? `<button class="order-btn btn-confirm" onclick="confirmPayment(${o.id})">Confirm Payment</button>` : ''}
-                                ${o.status === 'paid_confirmed' ? `<button class="order-btn btn-deliver" onclick="markDelivered(${o.id})">Mark Delivered</button>` : ''}
-                            </div>
-                        </div>
+                card.innerHTML = `
+                    <div class="order-header">
+                        <span class="order-code">${o.order_code}</span>
+                        <span class="order-status status-${o.status}">${o.status}</span>
                     </div>
-                `).join('');
-                
-            } catch (e) {
-                console.error('loadOrders error:', e);
+                    <div class="order-items">
+                        <p style="margin-bottom:6px; color:var(--text); font-weight:500;">${itemsSummaryText}</p>
+                        <p style="font-size:12px;">👤 ${o.customer_name} — <span style="color:var(--accent); font-weight:600;" onclick="window.open('https://wa.me/${o.customer_phone}')">Chat WhatsApp</span></p>
+                        <p style="font-size:12px; margin-top:2px;">📍 ${o.delivery_address}</p>
+                    </div>
+                    <div class="order-footer">
+                        <span class="order-total">₦${o.total_amount.toLocaleString()}</span>
+                        <select class="control-select" onchange="changeStatus(${o.id}, this.value)">
+                            <option value="pending" ${o.status === 'pending' ? 'selected' : ''}>Pending</option>
+                            <option value="confirmed" ${o.status === 'confirmed' ? 'selected' : ''}>Confirm</option>
+                            <option value="delivered" ${o.status === 'delivered' ? 'selected' : ''}>Delivered</option>
+                            <option value="cancelled" ${o.status === 'cancelled' ? 'selected' : ''}>Cancel</option>
+                        </select>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        async function changeStatus(orderId, nextStatus) {
+            const res = await fetch(`/api/orders/${orderId}/status`, {
+                method: "POST",
+                headers: {
+                    "X-Telegram-Init-Data": tg.initData,
+                    "Content-Type": "application/json"
+                },
+                body: json.stringify({ status: nextStatus })
+            });
+            if (res.ok) {
+                loadOrders();
+                tg.HapticFeedback.notificationOccurred('success');
             }
         }
 
-        window.deleteProduct = async function(id) {
-            tg.showConfirm('Delete this product permanently?', async (confirmed) => {
-                if (!confirmed) return;
-                tg.HapticFeedback.notificationOccurred('warning');
-                try {
-                    const res = await fetch(`/api/vendor/products/${id}`, {
-                        method: 'DELETE',
-                        headers: { 'X-Telegram-Init-Data': tg.initData }
-                    });
-                    const data = await res.json();
-                    if (res.ok && data.success) {
-                        tg.HapticFeedback.notificationOccurred('success');
-                        await loadProducts();
-                    } else {
-                        tg.showAlert(data.detail || 'Failed to delete');
-                    }
-                } catch (e) {
-                    console.error('Delete error:', e);
-                    tg.showAlert('Network error');
-                }
-            });
+        function copyStorefrontLink() {
+            if (!currentVendorLink) return;
+            // Native direct clip share sheet call for Telegram
+            navigator.clipboard.writeText(currentVendorLink);
+            tg.showAlert("Your unique deep-link store URL has been copied to your phone clipboard! Post it to your WhatsApp status to accept orders.");
         }
 
-        window.confirmPayment = async function(orderId) {
-            tg.showConfirm('Confirm you received payment for this order?', async (confirmed) => {
-                if (!confirmed) return;
-                try {
-                    const res = await fetch(`/api/vendor/orders/${orderId}/confirm-payment`, {
-                        method: 'POST',
-                        headers: { 'X-Telegram-Init-Data': tg.initData }
-                    });
-                    if (res.ok) {
-                        tg.HapticFeedback.notificationOccurred('success');
-                        await loadOrders();
-                    } else {
-                        tg.showAlert('Failed to confirm');
-                    }
-                } catch (e) {
-                    tg.showAlert('Network error');
-                }
-            });
-        }
-
-        window.markDelivered = async function(orderId) {
-            tg.showConfirm('Mark this order as delivered?', async (confirmed) => {
-                if (!confirmed) return;
-                try {
-                    const res = await fetch(`/api/vendor/orders/${orderId}/deliver`, {
-                        method: 'POST',
-                        headers: { 'X-Telegram-Init-Data': tg.initData }
-                    });
-                    if (res.ok) {
-                        tg.HapticFeedback.notificationOccurred('success');
-                        await loadOrders();
-                    } else {
-                        tg.showAlert('Failed to mark delivered');
-                    }
-                } catch (e) {
-                    tg.showAlert('Network error');
-                }
-            });
-        }
-
-        window.addProduct = function() {
-            tg.HapticFeedback.impactOccurred('light');
-            tg.close();
-        }
-
-        window.shareStore = function() {
-            const link = document.getElementById('store-link').textContent;
-            const text = `Check out my store on Business Hub! ${link}`;
-            tg.openTelegramLink(`https://t.me/share/url?url=${encodeURIComponent(link)}&text=${encodeURIComponent(text)}`);
-        }
-
-        window.switchTab = function(tab) {
-            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-            event.target.classList.add('active');
-            
-            document.getElementById('orders-section').classList.add('hidden');
-            document.getElementById('products-section').classList.add('hidden');
-            document.getElementById('analytics-section').classList.add('hidden');
-            document.getElementById(`${tab}-section`).classList.remove('hidden');
-        }
-
-        init();
+        window.onload = initConsole;
     </script>
 </body>
 </html>
