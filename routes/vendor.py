@@ -12,7 +12,7 @@ from pydantic import BaseModel
 from database import get_db
 from models import Vendor, Product, Order
 from utils import validate_init_data
-from config import PAYSTACK_SECRET_KEY, ENABLE_PAYSTACK, TRIAL_DAYS, BOT_TOKEN
+from config import TRIAL_DAYS, BOT_TOKEN
 
 router = APIRouter(prefix="/api/vendor", tags=["vendor"])
 logger = logging.getLogger(__name__)
@@ -102,8 +102,7 @@ async def get_vendor_me(request: Request, db: Session = Depends(get_db)):
         "is_active": vendor.is_active,
         "subscription_expiry": vendor.subscription_expiry.isoformat() if vendor.subscription_expiry else None,
         "days_left": days_left,
-        "on_trial": on_trial,
-        "has_subaccount": bool(vendor.paystack_subaccount)
+        "on_trial": on_trial
     }
 
 @router.post("/register/{telegram_id}")
@@ -124,31 +123,6 @@ async def register_vendor(telegram_id: int, data: VendorReg, request: Request, d
     if name_exists:
         raise HTTPException(400, "Business name already taken. Try another one")
 
-    subaccount = None
-    paystack_error = None
-
-    if ENABLE_PAYSTACK:
-        try:
-            async with httpx.AsyncClient() as client:
-                res = await client.post(
-                    "https://api.paystack.co/subaccount",
-                    headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
-                    json={
-                        "business_name": clean_name,
-                        "settlement_bank": data.bank_name,
-                        "account_number": data.account_number,
-                        "percentage_charge": 0
-                    },
-                    timeout=15.0
-                )
-                if res.status_code == 200:
-                    subaccount = res.json()["data"]["subaccount_code"]
-                else:
-                    paystack_error = res.json().get("message", "Bank verification failed")
-        except Exception as e:
-            paystack_error = str(e)
-            logger.warning(f"Paystack exception: {paystack_error}")
-
     vendor = Vendor(
         vendor_id=telegram_id,
         business_name=clean_name,
@@ -157,7 +131,6 @@ async def register_vendor(telegram_id: int, data: VendorReg, request: Request, d
         phone_number=data.phone_number.strip(),
         bank_name=data.bank_name,
         account_number=data.account_number,
-        paystack_subaccount=subaccount,
         is_active=True,
         subscription_expiry=datetime.now(timezone.utc) + timedelta(days=TRIAL_DAYS),
         commission_waived=True
@@ -165,10 +138,7 @@ async def register_vendor(telegram_id: int, data: VendorReg, request: Request, d
     db.add(vendor)
     db.commit()
 
-    response = {"status": "success", "trial_days": TRIAL_DAYS}
-    if paystack_error:
-        response["warning"] = f"Registered but payout setup pending: {paystack_error}"
-    return response
+    return {"status": "success", "trial_days": TRIAL_DAYS}
 
 @router.get("/products")
 async def get_my_products(request: Request, db: Session = Depends(get_db)):
@@ -257,10 +227,9 @@ async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(403, "Invalid auth")
 
-    # KEY FIX: Include pending orders so vendor sees them immediately after checkout
     orders = db.query(Order).filter(
         Order.vendor_id == user['id'],
-        Order.status.in_(["pending", "paid_unconfirmed", "paid_confirmed", "delivered"])
+        Order.status.in_(["pending", "confirmed", "delivered"])
     ).order_by(Order.created_at.desc()).limit(50).all()
 
     return [{
@@ -270,10 +239,9 @@ async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
         "delivery_address": o.delivery_address,
         "items": json.loads(o.items),
         "total_amount": float(o.total_amount),
-        "you_keep": float(o.total_amount - o.commission),
         "created_at": o.created_at.isoformat(),
         "status": o.status,
-        "order_code": o.paystack_reference
+        "order_code": o.order_code
     } for o in orders]
 
 @router.post("/orders/{order_id}/confirm-payment")
@@ -287,10 +255,10 @@ async def confirm_payment(order_id: int, request: Request, db: Session = Depends
     if not order:
         raise HTTPException(404, "Order not found")
 
-    if order.status not in ["pending", "paid_unconfirmed"]:
+    if order.status not in ["pending"]:
         raise HTTPException(400, f"Order already {order.status}")
 
-    order.status = "paid_confirmed"
+    order.status = "confirmed"
 
     # Deduct stock
     items = json.loads(order.items)
