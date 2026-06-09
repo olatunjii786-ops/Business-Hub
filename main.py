@@ -12,6 +12,7 @@ from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, 
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import RedirectResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Text, BigInteger, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
@@ -118,6 +119,12 @@ def validate_telegram_auth(init_data: str) -> Optional[dict]:
         return None
 
 # --- ROUTE TEMPLATE ENDPOINTS ---
+
+@app.get("/")
+async def root_redirect():
+    """Fixes the 404 error when hitting the raw domain root"""
+    return RedirectResponse(url="/shop")
+
 @app.get("/shop")
 async def serve_shop(request: Request):
     return templates.TemplateResponse("shop.html", {"request": request})
@@ -125,6 +132,81 @@ async def serve_shop(request: Request):
 @app.get("/vendor")
 async def serve_vendor(request: Request):
     return templates.TemplateResponse("vendor.html", {"request": request})
+
+
+# --- TELEGRAM BOT WEBHOOK ROUTER ---
+
+@app.post("/webhook")
+async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_db)):
+    """Catches text updates from Telegram and replies with the inline Mini App links"""
+    try:
+        payload = await request.json()
+        
+        if "message" in payload:
+            message = payload["message"]
+            chat_id = message["chat"]["id"]
+            user_text = message.get("text", "").strip()
+            
+            # Handle the initialization sequence
+            if user_text.startswith("/start"):
+                parts = user_text.split(" ", 1)
+                
+                # Check for referral deep-link parameters (e.g., /start 12345678)
+                if len(parts) > 1 and parts[1].isdigit():
+                    target_vendor_id = parts[1]
+                    welcome_msg = (
+                        f"🛍 *Welcome to Business Hub!*\n\n"
+                        f"You have opened a direct merchant boutique page.\n\n"
+                        f"👉 Tap the button below to view their active catalog elements!"
+                    )
+                    
+                    keyboard = {
+                        "inline_keyboard": [[
+                            {
+                                "text": "🌐 Open Boutique Storefront",
+                                "web_app": {"url": f"{APP_URL}/shop?startapp={target_vendor_id}"}
+                            }
+                        ]]
+                    }
+                else:
+                    # Generic fallback interface setup layout
+                    welcome_msg = (
+                        f"👋 *Welcome to the Business Hub Ecosystem!*\n\n"
+                        f"Are you a customer ready to shop top-tier products, or a vendor looking to manage your boutique automation?\n\n"
+                        f"Launch your workspace window instantly using the control deck below:"
+                    )
+                    
+                    keyboard = {
+                        "inline_keyboard": [
+                            [
+                                {
+                                    "text": "🛍 Open Global Marketplace",
+                                    "web_app": {"url": f"{APP_URL}/shop"}
+                                }
+                            ],
+                            [
+                                {
+                                    "text": "🛠 Open Vendor Workspace Console",
+                                    "web_app": {"url": f"{APP_URL}/vendor"}
+                                }
+                            ]
+                        ]
+                    }
+                
+                url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+                async with httpx.AsyncClient() as client:
+                    await client.post(url, json={
+                        "chat_id": chat_id,
+                        "text": welcome_msg,
+                        "parse_mode": "Markdown",
+                        "reply_markup": keyboard
+                    }, timeout=5.0)
+                    
+        return {"status": "ok"}
+    except Exception as e:
+        print(f"Webhook processing failure trace: {e}")
+        return {"status": "error", "detail": str(e)}
+
 
 # --- MERCHANDISE IDENTITY CONTROLLERS ---
 
@@ -162,7 +244,6 @@ async def register_or_edit_vendor(
     if not user:
         raise HTTPException(status_code=403, detail="Security auth parameter missing")
     
-    # Process custom gallery uploads locally
     logo_path = None
     if logo:
         file_extension = os.path.splitext(logo.filename)[1]
@@ -396,10 +477,9 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     db.commit()
     db.refresh(new_order)
 
-    # Fire real-time alert directly to vendor's Telegram chat thread
     alert_message = (
         f"🚨 *NEW ORDER RECEIVED!*\n\n"
-        f"🛍️ *Order Code:* `{generated_code}`\n"
+        f"🛍 *Order Code:* `{generated_code}`\n"
         f"💰 *Total Value:* ₦{calculated_total:,.2f}\n"
         f"👤 *Customer:* {req.customer_name}\n\n"
         f"👉 Open your Vendor App workspace to review full delivery parameters instantly!"
@@ -457,7 +537,6 @@ async def user_cancel_pending_order(order_id: int, request: Request, db: Session
     order.status = "cancelled"
     db.commit()
     
-    # Ping Vendor notifying them of the cancellation
     cancel_alert = f"⚠️ *ORDER CANCELLED BY CUSTOMER*\n\nOrder Code: `{order.order_code}`\nInventory has been automatically restocked to your catalog."
     await send_telegram_alert(order.vendor_id, cancel_alert)
     
@@ -497,7 +576,6 @@ async def adjust_order_lifecycle(order_id: int, status_payload: dict, request: R
     order.status = next_status
     db.commit()
     
-    # Notify Customer of their updated order state automatically via the bot chat channel
     status_emoji = "✅" if next_status == "confirmed" else "🚚" if next_status == "delivered" else "❌"
     user_alert = f"{status_emoji} *YOUR ORDER HAS BEEN UPDATED!*\n\nCode: `{order.order_code}`\nNew Status: *{next_status.upper()}*"
     await send_telegram_alert(order.customer_id, user_alert)
