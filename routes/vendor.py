@@ -44,7 +44,7 @@ async def upload_logo(request: Request, file: UploadFile = File(...), db: Sessio
         raise HTTPException(400, "Only images allowed")
 
     content = await file.read()
-    if len(content) > 5 * 1024 * 1024: # 5MB
+    if len(content) > 5 * 1024 * 1024:
         raise HTTPException(400, "Image too large. Max 5MB")
 
     temp_filename = f"/tmp/{uuid.uuid4()}.jpg"
@@ -65,7 +65,6 @@ async def upload_logo(request: Request, file: UploadFile = File(...), db: Sessio
             data = res.json()
             file_id = data["result"]["photo"][-1]["file_id"]
             msg_id = data["result"]["message_id"]
-            # Delete message to keep chat clean
             await client.post(
                 f"https://api.telegram.org/bot{BOT_TOKEN}/deleteMessage",
                 json={"chat_id": user['id'], "message_id": msg_id}
@@ -258,9 +257,10 @@ async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
     if not user:
         raise HTTPException(403, "Invalid auth")
 
+    # KEY FIX: Include pending orders so vendor sees them immediately after checkout
     orders = db.query(Order).filter(
         Order.vendor_id == user['id'],
-        Order.status.in_(["paid", "delivered"])
+        Order.status.in_(["pending", "paid_unconfirmed", "paid_confirmed", "delivered"])
     ).order_by(Order.created_at.desc()).limit(50).all()
 
     return [{
@@ -272,8 +272,35 @@ async def get_vendor_orders(request: Request, db: Session = Depends(get_db)):
         "total_amount": float(o.total_amount),
         "you_keep": float(o.total_amount - o.commission),
         "created_at": o.created_at.isoformat(),
-        "status": o.status
+        "status": o.status,
+        "order_code": o.paystack_reference
     } for o in orders]
+
+@router.post("/orders/{order_id}/confirm-payment")
+async def confirm_payment(order_id: int, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_init_data(init_data)
+    if not user:
+        raise HTTPException(403, "Invalid auth")
+
+    order = db.query(Order).filter(Order.id == order_id, Order.vendor_id == user['id']).first()
+    if not order:
+        raise HTTPException(404, "Order not found")
+
+    if order.status not in ["pending", "paid_unconfirmed"]:
+        raise HTTPException(400, f"Order already {order.status}")
+
+    order.status = "paid_confirmed"
+
+    # Deduct stock
+    items = json.loads(order.items)
+    for item in items:
+        product = db.query(Product).filter(Product.id == item["product_id"]).first()
+        if product:
+            product.quantity = max(0, product.quantity - item["quantity"])
+
+    db.commit()
+    return {"status": "confirmed"}
 
 @router.post("/orders/{order_id}/deliver")
 async def mark_delivered(order_id: int, request: Request, db: Session = Depends(get_db)):
