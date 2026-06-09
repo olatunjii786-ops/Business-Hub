@@ -127,12 +127,11 @@ async def root_redirect():
 
 @app.get("/shop")
 async def serve_shop(request: Request):
-    return templates.TemplateResponse("shop.html", {"request": request})
+    return templates.TemplateResponse(request=request, name="shop.html")
 
 @app.get("/vendor")
 async def serve_vendor(request: Request):
-    return templates.TemplateResponse("vendor.html", {"request": request})
-
+    return templates.TemplateResponse(request=request, name="vendor.html")
 
 # --- TELEGRAM BOT WEBHOOK ROUTER ---
 
