@@ -31,7 +31,6 @@ async def get_shop_products(vendor_id: int, db: Session = Depends(get_db)):
     products = db.query(Product).filter(
         Product.vendor_id == vendor_id,
         Product.is_active == True,
-        Product.is_deleted == False,
         Product.quantity > 0
     ).order_by(Product.created_at.desc()).all()
 
@@ -69,12 +68,11 @@ async def checkout(data: CheckoutReq, db: Session = Depends(get_db)):
             "size": item.get('size', 'One Size')
         })
 
-    # If on trial or no Paystack, 0 commission. Else take 5%
     now = datetime.now(timezone.utc)
     on_trial = vendor.commission_waived and vendor.subscription_expiry > now
     commission = 0 if on_trial or not vendor.paystack_subaccount else total * COMMISSION_RATE
 
-    reference = f"order_{vendor.vendor_id}_{int(datetime.now().timestamp())}"
+    reference = f"BH-{vendor.vendor_id}-{int(datetime.now().timestamp())}"
     order = Order(
         vendor_id=data.vendor_id,
         customer_name=data.customer_name,
@@ -88,48 +86,52 @@ async def checkout(data: CheckoutReq, db: Session = Depends(get_db)):
     )
     db.add(order)
     db.commit()
+    db.refresh(order)
 
-    # If no Paystack configured, just mark as pending and return
-    if not PAYSTACK_SECRET_KEY or not PAYSTACK_SECRET_KEY.startswith('sk_'):
-        logger.warning("Paystack not configured - order saved as pending")
-        return {"payment_url": None, "order_id": order.id, "message": "Order saved. Payment setup pending."}
+    payment_url = None
+    if PAYSTACK_SECRET_KEY and PAYSTACK_SECRET_KEY.startswith('sk_'):
+        try:
+            async with httpx.AsyncClient() as client:
+                payload = {
+                    "amount": int(total * 100),
+                    "email": f"customer_{reference}@businesshub.com",
+                    "reference": reference,
+                    "callback_url": f"{RENDER_URL}/api/paystack/callback"
+                }
+                if vendor.paystack_subaccount:
+                    payload.update({
+                        "subaccount": vendor.paystack_subaccount,
+                        "transaction_charge": int(commission * 100),
+                        "bearer": "subaccount"
+                    })
 
-    async with httpx.AsyncClient() as client:
-        payload = {
-            "amount": int(total * 100),
-            "email": f"customer_{reference}@businesshub.com",
-            "reference": reference,
-            "callback_url": f"{RENDER_URL}/api/paystack/callback"
-        }
-        # Only add subaccount if it exists
-        if vendor.paystack_subaccount:
-            payload.update({
-                "subaccount": vendor.paystack_subaccount,
-                "transaction_charge": int(commission * 100),
-                "bearer": "subaccount"
-            })
-            
-        res = await client.post(
-            "https://api.paystack.co/transaction/initialize",
-            headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
-            json=payload,
-            timeout=15.0
-        )
-        if res.status_code!= 200:
-            logger.error(f"Paystack init failed: {res.text}")
-            raise HTTPException(500, "Payment gateway error")
-            
-        return {"payment_url": res.json()["data"]["authorization_url"], "order_id": order.id}
+                res = await client.post(
+                    "https://api.paystack.co/transaction/initialize",
+                    headers={"Authorization": f"Bearer {PAYSTACK_SECRET_KEY}"},
+                    json=payload,
+                    timeout=15.0
+                )
+                if res.status_code == 200:
+                    payment_url = res.json()["data"]["authorization_url"]
+        except Exception as e:
+            logger.warning(f"Paystack init failed but order saved: {e}")
+
+    return {
+        "payment_url": payment_url,
+        "order_id": order.id,
+        "order_code": reference,
+        "message": "Order created. Contact vendor to confirm payment."
+    }
 
 @router.post("/api/paystack/callback")
 async def paystack_callback(request: Request, db: Session = Depends(get_db)):
     signature = request.headers.get("X-Paystack-Signature")
     body = await request.body()
-    
+
     if not PAYSTACK_SECRET_KEY:
         logger.error("Paystack callback but no secret key set")
         return {"status": "error"}
-        
+
     computed = hmac.new(PAYSTACK_SECRET_KEY.encode(), body, hashlib.sha512).hexdigest()
     if computed!= signature:
         logger.error("Invalid Paystack signature")
@@ -155,7 +157,7 @@ async def paystack_callback(request: Request, db: Session = Depends(get_db)):
         else:
             order = db.query(Order).filter(Order.paystack_reference == ref).first()
             if order and order.status == "pending":
-                order.status = "paid"
+                order.status = "paid_confirmed"
                 items = json.loads(order.items)
                 for item in items:
                     product = db.query(Product).filter(Product.id == item["product_id"]).first()
@@ -166,7 +168,8 @@ async def paystack_callback(request: Request, db: Session = Depends(get_db)):
                 from main import bot
                 await bot.send_message(
                     order.vendor_id,
-                    f"🎉 <b>New Order Paid!</b>\n\n"
+                    f"🎉 <b>New Order Paid via Paystack!</b>\n\n"
+                    f"<b>Order:</b> {order.paystack_reference}\n"
                     f"<b>Customer:</b> {order.customer_name}\n"
                     f"<b>Phone:</b> {order.customer_phone}\n"
                     f"<b>Address:</b> {order.delivery_address}\n"
