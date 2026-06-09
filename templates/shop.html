@@ -283,6 +283,199 @@
     }
 
     async function checkout() {
+    tg.HapticFeedback.impactOccurred('medium');
+    const name = prompt('Full name for delivery:');
+    if (!name) return;
+    const phone = prompt('Phone/WhatsApp number:');
+    if (!phone) return;
+    const address = prompt('Delivery address:');
+    if (!address) return;
+    
+    tg.MainButton.showProgress();
+    try {
+        const res = await fetch('/api/checkout', {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'X-Telegram-Init-Data': tg.initData // Fixes the 403 Authorization check
+            },
+            body: JSON.stringify({
+                customer_name: name,
+                customer_phone: phone,
+                delivery_address: address,
+                // FALLBACK VALUE: Uses c.id if c.product_id doesn't exist
+                items: cart.map(c => ({
+                    product_id: c.product_id || c.id, 
+                    quantity: c.quantity,
+                    size: c.size || 'One Size'
+                }))
+            })
+        });
+        
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Checkout failed');
+        
+        // Dynamic check to prevent app freeze if payment url is mock or missing
+        if (data.payment_url && data.payment_url.startsWith('http')) {
+            tg.openLink(data.payment_url);
+        } else {
+            tg.showAlert('Order recorded! Please contact vendor for payment.');
+        }
+
+<script>
+    const tg = window.Telegram.WebApp;
+    tg.ready();
+    tg.expand();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const vendorId = urlParams.get('vendor_id') || urlParams.get('tgWebAppStartParam');
+    
+    let cart = [];
+    let productsData = [];
+    let selectedProduct = null;
+    let selectedSize = 'One Size';
+    let selectedQty = 1;
+
+    async function init() {
+        try {
+            // Adjust public endpoints dynamic check
+            const endpoint = vendorId ? `/api/shop/${vendorId}/products` : '/api/marketplace/products';
+            const res = await fetch(endpoint);
+            if (!res.ok) throw new Error();
+            
+            const data = await res.json();
+            
+            if (vendorId) {
+                document.getElementById('shopTitle').textContent = data.vendor_name;
+                productsData = data.products;
+            } else {
+                productsData = data;
+            }
+
+            renderProducts();
+        } catch (e) {
+            document.getElementById('products').innerHTML = `
+                <div class="empty" style="grid-column: 1/-1;">
+                    <div class="empty-icon">🛍️</div>
+                    <h3>Store currently unavailable</h3>
+                </div>`;
+        }
+    }
+
+    function renderProducts() {
+        const container = document.getElementById('products');
+        if (productsData.length === 0) {
+            container.innerHTML = `
+                <div class="empty" style="grid-column: 1/-1;">
+                    <div class="empty-icon">📦</div>
+                    <h3>No products available</h3>
+                </div>`;
+            return;
+        }
+
+        container.innerHTML = productsData.map(p => `
+            <div class="product" onclick="openProduct(${p.id})">
+                <div class="product-img">
+                    ${p.telegram_file_id ? `<img src="/file/${p.telegram_file_id}">` : '👕'}
+                </div>
+                <div class="product-body">
+                    <div class="product-title">${p.title}</div>
+                    <div class="product-price">₦${p.price.toLocaleString()}</div>
+                    <div class="product-stock ${p.quantity <= 3 ? 'low' : ''}">Stock: ${p.quantity}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function openProduct(id) {
+        selectedProduct = productsData.find(p => p.id === id);
+        if (!selectedProduct) return;
+
+        document.getElementById('modalProductTitle').textContent = selectedProduct.title;
+        selectedQty = 1;
+        document.getElementById('qtyValue').textContent = selectedQty;
+
+        const sizeContainer = document.getElementById('sizeOptions');
+        if (selectedProduct.sizes && selectedProduct.sizes.trim().length > 0) {
+            const sizeList = selectedProduct.sizes.split(',').map(s => s.trim());
+            selectedSize = sizeList[0];
+            sizeContainer.innerHTML = sizeList.map((s, idx) => `
+                <button class="size-btn ${idx === 0 ? 'selected' : ''}" onclick="selectSize(this, '${s}')">${s}</button>
+            `).join('');
+        } else {
+            selectedSize = 'One Size';
+            sizeContainer.innerHTML = `<button class="size-btn selected" disabled>One Size</button>`;
+        }
+
+        document.getElementById('productModal').classList.add('show');
+        tg.HapticFeedback.impactOccurred('light');
+    }
+
+    function closeModal() {
+        document.getElementById('productModal').classList.remove('show');
+    }
+
+    function selectSize(btn, size) {
+        document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        selectedSize = size;
+        tg.HapticFeedback.impactOccurred('light');
+    }
+
+    function updateQty(amt) {
+        const newQty = selectedQty + amt;
+        if (newQty < 1 || newQty > selectedProduct.quantity) return;
+        selectedQty = newQty;
+        document.getElementById('qtyValue').textContent = selectedQty;
+        tg.HapticFeedback.impactOccurred('light');
+    }
+
+    function addToCart() {
+        if (!selectedProduct) return;
+
+        const existingItem = cart.find(c => c.product_id === selectedProduct.id && c.size === selectedSize);
+        if (existingItem) {
+            if (existingItem.quantity + selectedQty > selectedProduct.quantity) {
+                tg.showAlert('Cannot add more than available stock');
+                return;
+            }
+            existingItem.quantity += selectedQty;
+        } else {
+            cart.push({
+                product_id: selectedProduct.id,
+                title: selectedProduct.title,
+                price: selectedProduct.price,
+                quantity: selectedQty,
+                size: selectedSize
+            });
+        }
+
+        closeModal();
+        updateCart();
+        tg.HapticFeedback.notificationOccurred('success');
+    }
+
+    function updateCart() {
+        const total = cart.reduce((acc, c) => acc + (c.price * c.quantity), 0);
+        const count = cart.reduce((acc, c) => acc + c.quantity, 0);
+
+        document.getElementById('cartTotal').textContent = `₦${total.toLocaleString()}`;
+        document.getElementById('cartCount').textContent = `${count} item${count > 1 ? 's' : ''} selected`;
+
+        if (count > 0) {
+            document.getElementById('cartBar').classList.add('show');
+            tg.MainButton.setText('PROCEED TO CHECKOUT');
+            tg.MainButton.show();
+            // Clear prior listeners to avoid multiple prompts firing at once
+            tg.MainButton.offClick(checkout); 
+            tg.MainButton.onClick(checkout);
+        } else {
+            document.getElementById('cartBar').classList.remove('show');
+            tg.MainButton.hide();
+        }
+    }
+
+    async function checkout() {
         tg.HapticFeedback.impactOccurred('medium');
         const name = prompt('Full name for delivery:');
         if (!name) return;
@@ -297,45 +490,49 @@
                 method: 'POST',
                 headers: { 
                     'Content-Type': 'application/json',
-                    'X-Telegram-Init-Data': tg.initData // Auth validation initialization header
+                    'X-Telegram-Init-Data': tg.initData // Fixes 403 authorization checking
                 },
                 body: JSON.stringify({
                     customer_name: name,
                     customer_phone: phone,
                     delivery_address: address,
                     items: cart.map(c => ({
-                        product_id: c.product_id,
+                        product_id: c.product_id || c.id, 
                         quantity: c.quantity,
-                        size: c.size
+                        size: c.size || 'One Size'
                     }))
                 })
             });
-
-            if (!res.ok) {
-                const err = await res.json();
-                throw new Error(err.detail || 'Checkout processing failed');
-            }
             
             const data = await res.json();
-            tg.HapticFeedback.notificationOccurred('success');
-            tg.showAlert('Order Placed Successfully!');
-
-            // Take the first generated sub-order split to handle payment processing instantly
-            if (data.orders && data.orders.length > 0) {
+            if (!res.ok) throw new Error(data.detail || 'Checkout failed');
+            
+            // 1. Paystack routing validation
+            if (data.payment_url && data.payment_url.startsWith('http')) {
+                tg.openLink(data.payment_url);
+            } 
+            // 2. Fallback to direct WhatsApp chat distribution routing 
+            else if (data.orders && data.orders.length > 0) {
                 const targetOrder = data.orders[0];
                 const msgText = `Hello, I just placed an order via Business Hub!\n\n*Order Code:* ${targetOrder.order_code}\n*Total Value:* ₦${targetOrder.total.toLocaleString()}\n\nPlease provide payment confirmations details.`;
                 const whatsappUrl = `https://wa.me/${targetOrder.vendor_phone}?text=${encodeURIComponent(msgText)}`;
                 
                 tg.openLink(whatsappUrl);
+            } else {
+                tg.showAlert('Order recorded! Please contact vendor for payment.');
             }
-            
+
+            // Clean up cache states cleanly on success
+            localStorage.removeItem('cart');
             cart = [];
             updateCart();
+            
         } catch (e) {
+            console.error("Checkout script error:", e);
             tg.showAlert(e.message || 'Checkout failed. Try again.');
         } finally {
             tg.MainButton.hideProgress();
-            tg.MainButton.offClick(checkout); // Prevent listener double-firing traps
+            tg.MainButton.offClick(checkout); // Prevent duplicate tracking traps
         }
     }
 
