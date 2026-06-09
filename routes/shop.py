@@ -30,6 +30,7 @@ async def get_shop_products(vendor_id: int, db: Session = Depends(get_db)):
 
     return {
         "vendor_name": vendor.business_name,
+        "vendor_phone": vendor.phone_number,
         "products": [{
             "id": p.id,
             "title": p.title,
@@ -37,7 +38,9 @@ async def get_shop_products(vendor_id: int, db: Session = Depends(get_db)):
             "price": float(p.price),
             "quantity": p.quantity,
             "sizes": p.sizes,
-            "telegram_file_id": p.telegram_file_id
+            "telegram_file_id": p.telegram_file_id,
+            "vendor_id": p.vendor_id,
+            "vendor_phone": vendor.phone_number
         } for p in products]
     }
 
@@ -96,6 +99,7 @@ async def checkout(request: Request, data: CheckoutReq, db: Session = Depends(ge
             "order_id": order.id,
             "order_code": order_code,
             "vendor_name": vendor.business_name,
+            "vendor_phone": vendor.phone_number,
             "total": order_data["total"]
         })
 
