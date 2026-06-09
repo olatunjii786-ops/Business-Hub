@@ -14,7 +14,7 @@ class Vendor(Base):
     phone_number = Column(String(20))
     bank_name = Column(String(100))
     account_number = Column(String(10))
-    paystack_subaccount = Column(String(255))
+    # REMOVED: paystack_subaccount = Column(String(255))
     is_active = Column(Boolean, default=False)
     subscription_expiry = Column(DateTime(timezone=True))
     commission_waived = Column(Boolean, default=True)
@@ -42,13 +42,13 @@ class Order(Base):
     __tablename__ = "orders"
 
     id = Column(Integer, primary_key=True, index=True)
-    vendor_id = Column(Integer, ForeignKey("vendors.vendor_id"), nullable=False)
+    vendor_id = Column(BigInteger, ForeignKey("vendors.vendor_id"), nullable=False) # CHANGED: Integer -> BigInteger
     customer_name = Column(String(200), nullable=False)
     customer_phone = Column(String(20), nullable=False)
     delivery_address = Column(Text, nullable=False)
     items = Column(Text, default='[]') # JSON string
     total_amount = Column(Float, nullable=False)
-    order_code = Column(String(100), unique=True, nullable=False) # Changed from paystack_reference
+    order_code = Column(String(100), unique=True, nullable=False)
     status = Column(String(20), default="pending") # pending, confirmed, delivered, cancelled
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
