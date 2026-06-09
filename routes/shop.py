@@ -1,3 +1,6 @@
+import logging
+import traceback
+logger = logging.getLogger(__name__)
 from fastapi import APIRouter, Depends, Request, HTTPException
 from sqlalchemy.orm import Session
 from datetime import datetime, timezone
@@ -46,11 +49,17 @@ async def get_shop_products(vendor_id: int, db: Session = Depends(get_db)):
 
 @router.post("/api/checkout")
 async def checkout(request: Request, data: CheckoutReq, db: Session = Depends(get_db)):
+    logger.info("=== CHECKOUT ENDPOINT HIT ===")
+
     init_data = request.headers.get("X-Telegram-Init-Data")
+    logger.info(f"Init data length: {len(init_data) if init_data else 0}")
+
     user = validate_init_data(init_data)
     if not user:
+        logger.error(f"AUTH FAILED - init_data: {init_data[:100] if init_data else 'None'}")
         raise HTTPException(403, "Please open this from Telegram")
 
+    logger.info(f"Auth OK for user: {user['id']}")
     customer_telegram_id = user['id']
 
     # Group items by vendor
@@ -58,8 +67,10 @@ async def checkout(request: Request, data: CheckoutReq, db: Session = Depends(ge
     for item in data.items:
         product = db.query(Product).filter(Product.id == item['product_id']).first()
         if not product:
+            logger.error(f"Product {item['product_id']} not found")
             raise HTTPException(400, f"Product {item['product_id']} not found")
         if product.quantity < item['quantity']:
+            logger.error(f"Insufficient stock for {product.title}")
             raise HTTPException(400, f"Insufficient stock for {product.title}")
 
         vid = product.vendor_id
@@ -79,6 +90,7 @@ async def checkout(request: Request, data: CheckoutReq, db: Session = Depends(ge
     for vendor_id, order_data in vendor_orders.items():
         vendor = db.query(Vendor).filter(Vendor.vendor_id == vendor_id).first()
         if not vendor:
+            logger.warning(f"Vendor {vendor_id} not found, skipping")
             continue
 
         order_code = f"BH-{vendor_id}-{customer_telegram_id}-{int(datetime.now().timestamp())}"
@@ -93,8 +105,16 @@ async def checkout(request: Request, data: CheckoutReq, db: Session = Depends(ge
             status="pending"
         )
         db.add(order)
+
+        # Update stock
+        for item in order_data["items"]:
+            product = db.query(Product).filter(Product.id == item["product_id"]).first()
+            if product:
+                product.quantity -= item["quantity"]
+
         db.commit()
         db.refresh(order)
+        logger.info(f"Order created: {order_code}")
         created_orders.append({
             "order_id": order.id,
             "order_code": order_code,
@@ -104,8 +124,10 @@ async def checkout(request: Request, data: CheckoutReq, db: Session = Depends(ge
         })
 
     if not created_orders:
+        logger.error("No valid items to order")
         raise HTTPException(400, "No valid items to order")
 
+    logger.info(f"Checkout success: {len(created_orders)} orders created")
     return {
         "orders": created_orders,
         "message": "Orders created. Contact vendor(s) to arrange payment."
