@@ -1,186 +1,505 @@
-import logging
-import traceback
-import httpx
+import os
 import json
-from fastapi import FastAPI, Request, HTTPException
+import hmac
+import hashlib
+import shutil
+import httpx
+from datetime import datetime, timezone
+from typing import List, Optional
+from urllib.parse import parse_qsl
+from pydantic import BaseModel
+from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, HTMLResponse, Response
 from fastapi.templating import Jinja2Templates
-from aiogram import Bot, Dispatcher, types, F
-from aiogram.filters import Command
-from aiogram.types import WebAppInfo, InlineKeyboardMarkup, InlineKeyboardButton
-from aiogram.client.default import DefaultBotProperties
-from aiogram.enums import ParseMode
-from config import *
-from database import run_migrations, SessionLocal, get_db
-from utils import validate_init_data
-from models import Vendor, Product
+from fastapi.staticfiles import StaticFiles
+from sqlalchemy import create_engine, Column, Integer, String, Float, Text, BigInteger, Boolean
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
 
-from routes import admin, vendor, shop, custom
+# --- CONFIGURATION & ENVIRONMENT SETUP ---
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+DATABASE_URL = os.getenv("DATABASE_URL")
+ADMIN_ID = os.getenv("ADMIN_TELEGRAM_ID")
+APP_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
 
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+if not BOT_TOKEN or not DATABASE_URL:
+    raise ValueError("CRITICAL ERROR: Environment variables TELEGRAM_BOT_TOKEN or DATABASE_URL are missing!")
 
-app = FastAPI(title="Business Hub Engine")
+BOT_USERNAME = "isaacbusinessbot"
+
+app = FastAPI(title="Business Hub Central Engine")
 templates = Jinja2Templates(directory="templates")
-app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
-bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
-dp = Dispatcher()
+# Configure local image upload storage pipelines
+UPLOAD_DIR = "uploads"
+os.makedirs(UPLOAD_DIR, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
 
-app.include_router(admin.router)
-app.include_router(vendor.router)
-app.include_router(shop.router)
-app.include_router(custom.router)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-@app.exception_handler(Exception)
-async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global error: {exc}")
-    logger.error(traceback.format_exc())
-    return JSONResponse(status_code=500, content={"detail": f"Server error: {str(exc)}"})
+# --- DATABASE ENGINE CONFIGURATION (SUPABASE) ---
+engine = create_engine(DATABASE_URL, pool_pre_ping=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-# === TELEGRAM FILE PROXY ===
-@app.get("/file/{file_id}")
-async def get_telegram_file(file_id: str):
-    """Proxy Telegram images so we don't expose bot token in HTML"""
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- RELATIONAL DATA MODELS ---
+class Vendor(Base):
+    __tablename__ = "vendors"
+    vendor_id = Column(BigInteger, primary_key=True)  # Core Telegram Chat ID
+    business_name = Column(String(255), nullable=False)
+    bio = Column(Text, nullable=True)
+    phone_number = Column(String(20), nullable=False)  # Cleaned WhatsApp String
+    logo_url = Column(Text, nullable=True)
+    is_approved = Column(Boolean, default=True)
+
+class Product(Base):
+    __tablename__ = "products"
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(BigInteger, nullable=False)
+    title = Column(String(200), nullable=False)
+    price = Column(Float, nullable=False)
+    quantity = Column(Integer, default=1)
+    sizes = Column(String(255), nullable=True)          # Stored comma-separated values
+    category = Column(String(100), default="General")   # Sorting and Discovery Pill Index
+    image_url = Column(Text, nullable=True)
+
+class Order(Base):
+    __tablename__ = "orders"
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(BigInteger, nullable=False)
+    customer_id = Column(BigInteger, nullable=False)     # Fixed tracking integer rule
+    customer_name = Column(String(200), nullable=False)
+    customer_phone = Column(String(20), nullable=False)
+    delivery_address = Column(Text, nullable=False)
+    items = Column(Text, default="[]")                  # Safe JSON serialization text block
+    total_amount = Column(Float, nullable=False)
+    order_code = Column(String(100), unique=True, nullable=False)
+    status = Column(String(50), default="pending")      # pending, confirmed, delivered, cancelled
+
+# Structural compilation trigger
+Base.metadata.create_all(bind=engine)
+
+# --- TELEGRAM BOT PING NOTIFICATION UTIL ---
+async def send_telegram_alert(chat_id: int, message: str):
+    url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
     try:
         async with httpx.AsyncClient() as client:
-            # Step 1: Get file_path from Telegram
-            res = await client.get(f"https://api.telegram.org/bot{BOT_TOKEN}/getFile?file_id={file_id}", timeout=10.0)
-            if res.status_code!= 200:
-                logger.error(f"getFile failed: {res.text}")
-                return Response(status_code=404)
-            
-            file_path = res.json()["result"]["file_path"]
-            
-            # Step 2: Download actual file
-            file_res = await client.get(f"https://api.telegram.org/file/bot{BOT_TOKEN}/{file_path}", timeout=10.0)
-            if file_res.status_code!= 200:
-                return Response(status_code=404)
-                
-            return Response(content=file_res.content, media_type="image/jpeg")
+            await client.post(url, json=payload, timeout=5.0)
     except Exception as e:
-        logger.error(f"File proxy error: {e}")
-        return Response(status_code=500)
+        print(f"Async Alert standard fail trace: {e}")
 
-# === TELEGRAM HANDLERS ===
-@dp.message(Command("start"))
-async def cmd_start(message: types.Message):
-    args = message.text.split()
-    if len(args) > 1 and args[1].startswith("shop_"):
-        slug = args[1].replace("shop_", "")
-        with SessionLocal() as db:
-            vendor = db.query(Vendor).filter(Vendor.business_name.ilike(slug.replace("_", " "))).first()
-            if vendor:
-                kb = InlineKeyboardMarkup(inline_keyboard=[[
-                    InlineKeyboardButton(text="🛍️ Open Shop", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/shop/{vendor.vendor_id}"))
-                ]])
-                await message.answer(f"Welcome to <b>{vendor.business_name}</b>!", reply_markup=kb)
-                return
-
-    kb = InlineKeyboardMarkup(inline_keyboard=[
-        [InlineKeyboardButton(text="🚀 Register Business", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/register"))],
-        [InlineKeyboardButton(text="📊 Vendor Dashboard", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/vendor"))],
-        [InlineKeyboardButton(text="🛍️ Browse Stores", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/marketplace"))]
-    ])
-    await message.answer(
-        "Welcome to <b>Business Hub</b> 🚀\n\n"
-        "Sell on Telegram. Get paid instantly.\n"
-        "7 days free. Keep 100% of sales.\n\n"
-        "Tap below to start:",
-        reply_markup=kb
-    )
-
-@dp.message(Command("admin"))
-async def cmd_admin(message: types.Message):
-    if message.from_user.id!= ADMIN_TELEGRAM_ID:
-        await message.answer("Admin only")
-        return
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="📊 Open Dashboard", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/admin"))
-    ]])
-    await message.answer("Admin panel:", reply_markup=kb)
-
-@dp.message(F.photo)
-async def handle_product_photo(message: types.Message):
-    user_id = message.from_user.id
-    with SessionLocal() as db:
-        vendor = db.query(Vendor).filter(Vendor.vendor_id == user_id).first()
-        if not vendor:
-            await message.answer("Register first with /start")
-            return
-
-    file_id = message.photo[-1].file_id
-    kb = InlineKeyboardMarkup(inline_keyboard=[[
-        InlineKeyboardButton(text="✨ Fill Product Details", web_app=WebAppInfo(url=f"{RENDER_URL}/webapp/add-product/{file_id}"))
-    ]])
-    await message.answer("Got your photo! Tap below to add name, price, and details:", reply_markup=kb)
-
-# === WEBAPP ROUTES ===
-@app.get("/webapp/admin", response_class=HTMLResponse)
-async def admin_webapp(request: Request):
-    return templates.TemplateResponse(request, "admin.html")
-
-@app.get("/webapp/vendor", response_class=HTMLResponse)
-async def vendor_webapp(request: Request):
-    return templates.TemplateResponse(request, "vendor.html")
-
-@app.get("/webapp/register", response_class=HTMLResponse)
-async def register_webapp(request: Request):
-    return templates.TemplateResponse(request, "register.html")
-
-@app.get("/webapp/shop/{vendor_id}", response_class=HTMLResponse)
-async def shop_webapp(request: Request, vendor_id: int):
-    return templates.TemplateResponse(request, "shop.html")
-
-@app.get("/webapp/marketplace", response_class=HTMLResponse)
-async def marketplace_webapp(request: Request):
-    return templates.TemplateResponse(request, "customer.html")
-
-@app.get("/webapp/add-product/{file_id}", response_class=HTMLResponse)
-async def add_product_webapp(request: Request, file_id: str):
-    return templates.TemplateResponse(request, "add_product.html", {"file_id": file_id})
-
-# === PUBLIC API ROUTES ===
-@app.get("/api/marketplace/products")
-async def get_marketplace_products():
-    """Public endpoint for customers to browse all products"""
+# --- CRYPTOGRAPHIC TELEGRAM WEBAPP AUTHS ---
+def validate_telegram_auth(init_data: str) -> Optional[dict]:
+    if not init_data:
+        return None
     try:
-        with SessionLocal() as db:
-            products = db.query(Product).join(Vendor).filter(
-                Vendor.is_active == True
-            ).all()
-            
-            result = []
-            for p in products:
-                result.append({
-                    "id": p.id,
-                    "title": p.title,
-                    "price": float(p.price),
-                    "quantity": getattr(p, 'quantity', 1),
-                    "telegram_file_id": getattr(p, 'telegram_file_id', None),
-                    "vendor_id": p.vendor.vendor_id,
-                    "vendor_name": p.vendor.business_name
-                })
-            return result
-    except Exception as e:
-        logger.error(f"Marketplace products error: {e}")
-        return []
+        vals = dict(parse_qsl(init_data, keep_blank_values=True))
+        hash_check = vals.pop('hash', None)
+        data_check = '\n'.join(f"{k}={v}" for k, v in sorted(vals.items()))
+        secret = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
+        h = hmac.new(secret, data_check.encode(), hashlib.sha256).hexdigest()
+        if h != hash_check:
+            return None
+        return json.loads(vals['user'])
+    except Exception:
+        return None
 
-# === STARTUP ===
-@app.on_event("startup")
-async def on_startup():
-    run_migrations()
-    webhook_url = f"{RENDER_URL}/webhook"
-    await bot.set_webhook(webhook_url)
-    logger.info(f"Webhook set to {webhook_url}")
+# --- ROUTE TEMPLATE ENDPOINTS ---
+@app.get("/shop")
+async def serve_shop(request: Request):
+    return templates.TemplateResponse("shop.html", {"request": request})
 
-@app.post("/webhook")
-async def telegram_webhook(request: Request):
-    update = types.Update.model_validate(await request.json(), context={"bot": bot})
-    await dp.feed_update(bot, update)
-    return {"ok": True}
+@app.get("/vendor")
+async def serve_vendor(request: Request):
+    return templates.TemplateResponse("vendor.html", {"request": request})
 
-@app.get("/")
-async def root():
-    return {"status": "Business Hub Engine Running"}
+# --- MERCHANDISE IDENTITY CONTROLLERS ---
+
+@app.get("/api/vendor/me")
+async def verify_vendor_session(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Session tracking check broken")
+    
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if not vendor:
+        return {"registered": False}
+    
+    return {
+        "registered": True,
+        "business_name": vendor.business_name,
+        "bio": vendor.bio,
+        "phone_number": vendor.phone_number,
+        "logo_url": vendor.logo_url,
+        "direct_link": f"https://t.me/{BOT_USERNAME}/app?startapp={vendor.vendor_id}"
+    }
+
+@app.post("/api/vendor/register")
+async def register_or_edit_vendor(
+    request: Request,
+    business_name: str = Form(...),
+    bio: str = Form(""),
+    phone_number: str = Form(...),
+    logo: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Security auth parameter missing")
+    
+    # Process custom gallery uploads locally
+    logo_path = None
+    if logo:
+        file_extension = os.path.splitext(logo.filename)[1]
+        unique_filename = f"logo_{user['id']}{file_extension}"
+        logo_path = f"/{UPLOAD_DIR}/{unique_filename}"
+        with open(f"{UPLOAD_DIR}/{unique_filename}", "wb") as buffer:
+            shutil.copyfileobj(logo.file, buffer)
+
+    clean_phone = "".join(c for c in phone_number if c.isdigit())
+    if clean_phone.startswith("0") and len(clean_phone) == 11:
+        clean_phone = "234" + clean_phone[1:]
+
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if vendor:
+        vendor.business_name = business_name
+        vendor.bio = bio
+        vendor.phone_number = clean_phone
+        if logo_path:
+            vendor.logo_url = logo_path
+    else:
+        vendor = Vendor(
+            vendor_id=user['id'],
+            business_name=business_name,
+            bio=bio,
+            phone_number=clean_phone,
+            logo_url=logo_path
+        )
+        db.add(vendor)
+        
+    db.commit()
+    return {"success": True}
+
+# --- ACTIVE CATALOG INVENTORY MANAGEMENT ENDPOINTS ---
+
+@app.post("/api/products")
+async def create_new_product(
+    request: Request,
+    title: str = Form(...),
+    price: float = Form(...),
+    quantity: int = Form(...),
+    sizes: str = Form(""),
+    category: str = Form("General"),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Invalid request parameters")
+    
+    image_path = None
+    if image:
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        file_extension = os.path.splitext(image.filename)[1]
+        unique_filename = f"prod_{user['id']}_{timestamp}{file_extension}"
+        image_path = f"/{UPLOAD_DIR}/{unique_filename}"
+        with open(f"{UPLOAD_DIR}/{unique_filename}", "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+
+    new_product = Product(
+        vendor_id=user['id'],
+        title=title,
+        price=price,
+        quantity=quantity,
+        sizes=sizes,
+        category=category.strip(),
+        image_url=image_path
+    )
+    db.add(new_product)
+    db.commit()
+    return {"success": True}
+
+@app.post("/api/products/{product_id}/edit")
+async def modify_product_entry(
+    product_id: int,
+    request: Request,
+    title: str = Form(...),
+    price: float = Form(...),
+    quantity: int = Form(...),
+    sizes: str = Form(""),
+    category: str = Form("General"),
+    image: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db)
+):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Auth trace invalid")
+        
+    product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Product entity target missing")
+        
+    product.title = title
+    product.price = price
+    product.quantity = quantity
+    product.sizes = sizes
+    product.category = category.strip()
+    
+    if image:
+        timestamp = int(datetime.now(timezone.utc).timestamp())
+        file_extension = os.path.splitext(image.filename)[1]
+        unique_filename = f"prod_{user['id']}_{timestamp}{file_extension}"
+        image_path = f"/{UPLOAD_DIR}/{unique_filename}"
+        with open(f"{UPLOAD_DIR}/{unique_filename}", "wb") as buffer:
+            shutil.copyfileobj(image.file, buffer)
+        product.image_url = image_path
+        
+    db.commit()
+    return {"success": True}
+
+@app.delete("/api/products/{product_id}")
+async def remove_catalog_product(product_id: int, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Security validation failed")
+        
+    product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
+    if not product:
+        raise HTTPException(status_code=404, detail="Entity target missing")
+        
+    db.delete(product)
+    db.commit()
+    return {"success": True}
+
+@app.get("/api/vendor/products")
+async def list_vendor_products(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    products = db.query(Product).filter(Product.vendor_id == user['id']).order_by(Product.id.desc()).all()
+    return [{
+        "id": p.id,
+        "title": p.title,
+        "price": p.price,
+        "quantity": p.quantity,
+        "sizes": p.sizes,
+        "category": p.category,
+        "image_url": p.image_url
+    } for p in products]
+
+# --- MARKETPLACE & CHECKOUT HANDLING SYSTEMS ---
+
+@app.get("/api/marketplace/configs")
+async def load_storefront_configuration(vendor_id: Optional[int] = None, db: Session = Depends(get_db)):
+    if vendor_id:
+        v = db.query(Vendor).filter(Vendor.vendor_id == vendor_id).first()
+        if not v:
+            return {"mode": "marketplace", "vendors": [], "products": []}
+        products = db.query(Product).filter(Product.vendor_id == vendor_id).order_by(Product.id.desc()).all()
+        return {
+            "mode": "store",
+            "vendor": {"name": v.business_name, "bio": v.bio, "logo": v.logo_url, "id": v.vendor_id},
+            "products": [{"id": p.id, "title": p.title, "price": p.price, "quantity": p.quantity, "sizes": p.sizes, "category": p.category, "image_url": p.image_url} for p in products]
+        }
+    
+    vendors = db.query(Vendor).all()
+    products = db.query(Product).order_by(Product.id.desc()).limit(150).all()
+    return {
+        "mode": "marketplace",
+        "vendors": [{"id": ven.vendor_id, "name": ven.business_name, "logo": ven.logo_url} for ven in vendors],
+        "products": [{"id": p.id, "vendor_id": p.vendor_id, "title": p.title, "price": p.price, "quantity": p.quantity, "sizes": p.sizes, "category": p.category, "image_url": p.image_url} for p in products]
+    }
+
+class CheckoutItem(BaseModel):
+    product_id: int
+    quantity: int
+    size: str
+
+class CheckoutRequest(BaseModel):
+    customer_name: str
+    customer_phone: str
+    delivery_address: str
+    items: List[CheckoutItem]
+
+@app.post("/api/checkout")
+async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Session expired")
+
+    if not req.items:
+        raise HTTPException(status_code=400, detail="Cart manifest is empty")
+
+    first_id = req.items[0].product_id
+    sample = db.query(Product).filter(Product.id == first_id).first()
+    if not sample:
+        raise HTTPException(status_code=404, detail="Product not listed")
+    
+    target_vendor_id = sample.vendor_id
+    vendor_profile = db.query(Vendor).filter(Vendor.vendor_id == target_vendor_id).first()
+    vendor_phone = vendor_profile.phone_number if vendor_profile else "234000000000"
+
+    calculated_total = 0.0
+    items_summary = []
+
+    for item in req.items:
+        prod = db.query(Product).filter(Product.id == item.product_id).first()
+        if not prod or prod.quantity < item.quantity:
+            raise HTTPException(status_code=400, detail=f"Stock limit exceeded for {prod.title if prod else 'Item'}")
+        
+        prod.quantity -= item.quantity
+        calculated_total += (prod.price * item.quantity)
+        items_summary.append({
+            "product_id": prod.id,
+            "title": prod.title,
+            "price": prod.price,
+            "quantity": item.quantity,
+            "size": item.size
+        })
+
+    timestamp = int(datetime.now(timezone.utc).timestamp())
+    generated_code = f"BH-{target_vendor_id}-{user['id']}-{timestamp}"
+
+    new_order = Order(
+        vendor_id=target_vendor_id,
+        customer_id=user['id'],
+        customer_name=req.customer_name,
+        customer_phone=req.customer_phone,
+        delivery_address=req.delivery_address,
+        items=json.dumps(items_summary),
+        total_amount=calculated_total,
+        order_code=generated_code,
+        status="pending"
+    )
+    db.add(new_order)
+    db.commit()
+    db.refresh(new_order)
+
+    # Fire real-time alert directly to vendor's Telegram chat thread
+    alert_message = (
+        f"🚨 *NEW ORDER RECEIVED!*\n\n"
+        f"🛍️ *Order Code:* `{generated_code}`\n"
+        f"💰 *Total Value:* ₦{calculated_total:,.2f}\n"
+        f"👤 *Customer:* {req.customer_name}\n\n"
+        f"👉 Open your Vendor App workspace to review full delivery parameters instantly!"
+    )
+    await send_telegram_alert(target_vendor_id, alert_message)
+
+    return {
+        "success": True,
+        "order_code": new_order.order_code,
+        "total_amount": new_order.total_amount,
+        "vendor_phone": vendor_phone
+    }
+
+# --- ORDER TRACING ENGINE PIPELINES ---
+
+@app.get("/api/customer/orders")
+async def view_customer_orders(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Unauthorized status check")
+
+    orders = db.query(Order).filter(Order.customer_id == user['id']).order_by(Order.id.desc()).all()
+    return [{
+        "id": o.id,
+        "order_code": o.order_code,
+        "total_amount": o.total_amount,
+        "status": o.status,
+        "items": json.loads(o.items)
+    } for o in orders]
+
+@app.post("/api/customer/orders/{order_id}/cancel")
+async def user_cancel_pending_order(order_id: int, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Invalid tracking transaction")
+        
+    order = db.query(Order).filter(Order.id == order_id, Order.customer_id == user['id']).first()
+    if not order:
+        raise HTTPException(status_code=404, detail="Order tracking signature absent")
+        
+    if order.status != "pending":
+        raise HTTPException(status_code=400, detail="Cannot adjust inventory states once confirmed")
+        
+    try:
+        loaded_items = json.loads(order.items)
+        for item in loaded_items:
+            prod = db.query(Product).filter(Product.id == item["product_id"]).first()
+            if prod:
+                prod.quantity += item["quantity"]
+    except Exception:
+        pass
+        
+    order.status = "cancelled"
+    db.commit()
+    
+    # Ping Vendor notifying them of the cancellation
+    cancel_alert = f"⚠️ *ORDER CANCELLED BY CUSTOMER*\n\nOrder Code: `{order.order_code}`\nInventory has been automatically restocked to your catalog."
+    await send_telegram_alert(order.vendor_id, cancel_alert)
+    
+    return {"success": True}
+
+@app.get("/api/vendor/orders")
+async def view_incoming_vendor_orders(request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Unauthorized tracking index access")
+
+    orders = db.query(Order).filter(Order.vendor_id == user['id']).order_by(Order.id.desc()).all()
+    return [{
+        "id": o.id,
+        "order_code": o.order_code,
+        "customer_name": o.customer_name,
+        "customer_phone": o.customer_phone,
+        "delivery_address": o.delivery_address,
+        "total_amount": o.total_amount,
+        "status": o.status,
+        "items": json.loads(o.items)
+    } for o in orders]
+
+@app.post("/api/orders/{order_id}/status")
+async def adjust_order_lifecycle(order_id: int, status_payload: dict, request: Request, db: Session = Depends(get_db)):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Handshake credentials absent")
+
+    order = db.query(Order).filter(Order.id == order_id, Order.vendor_id == user['id']).first()
+    if not order:
+        raise HTTPException(404, "Target order mapping not found")
+
+    next_status = status_payload.get("status", "pending")
+    order.status = next_status
+    db.commit()
+    
+    # Notify Customer of their updated order state automatically via the bot chat channel
+    status_emoji = "✅" if next_status == "confirmed" else "🚚" if next_status == "delivered" else "❌"
+    user_alert = f"{status_emoji} *YOUR ORDER HAS BEEN UPDATED!*\n\nCode: `{order.order_code}`\nNew Status: *{next_status.upper()}*"
+    await send_telegram_alert(order.customer_id, user_alert)
+    
+    return {"success": True}
