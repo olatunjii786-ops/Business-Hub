@@ -30,7 +30,6 @@ BOT_USERNAME = "isaacbusinessbot"
 app = FastAPI(title="Business Hub Central Engine")
 templates = Jinja2Templates(directory="templates")
 
-# Configure local image upload storage pipelines
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
@@ -43,7 +42,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# --- DATABASE ENGINE CONFIGURATION (SUPABASE) ---
+# --- DATABASE ENGINE CONFIGURATION ---
 engine = create_engine(DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -58,10 +57,10 @@ def get_db():
 # --- RELATIONAL DATA MODELS ---
 class Vendor(Base):
     __tablename__ = "vendors"
-    vendor_id = Column(BigInteger, primary_key=True)  # Core Telegram Chat ID
+    vendor_id = Column(BigInteger, primary_key=True)
     business_name = Column(String(255), nullable=False)
     bio = Column(Text, nullable=True)
-    phone_number = Column(String(20), nullable=False)  # Cleaned WhatsApp String
+    phone_number = Column(String(20), nullable=False)
     logo_url = Column(Text, nullable=True)
     is_approved = Column(Boolean, default=True)
 
@@ -72,27 +71,26 @@ class Product(Base):
     title = Column(String(200), nullable=False)
     price = Column(Float, nullable=False)
     quantity = Column(Integer, default=1)
-    sizes = Column(String(255), nullable=True)          # Stored comma-separated values
-    category = Column(String(100), default="General")   # Sorting and Discovery Pill Index
+    sizes = Column(String(255), nullable=True)
+    category = Column(String(100), default="General")
     image_url = Column(Text, nullable=True)
 
 class Order(Base):
     __tablename__ = "orders"
     id = Column(Integer, primary_key=True, index=True)
     vendor_id = Column(BigInteger, nullable=False)
-    customer_id = Column(BigInteger, nullable=False)     # Fixed tracking integer rule
+    customer_id = Column(BigInteger, nullable=False)
     customer_name = Column(String(200), nullable=False)
     customer_phone = Column(String(20), nullable=False)
     delivery_address = Column(Text, nullable=False)
-    items = Column(Text, default="[]")                  # Safe JSON serialization text block
+    items = Column(Text, default="[]")
     total_amount = Column(Float, nullable=False)
     order_code = Column(String(100), unique=True, nullable=False)
-    status = Column(String(50), default="pending")      # pending, confirmed, delivered, cancelled
+    status = Column(String(50), default="pending")
 
-# Structural compilation trigger
 Base.metadata.create_all(bind=engine)
 
-# --- TELEGRAM BOT PING NOTIFICATION UTIL ---
+# --- TELEGRAM BOT UTILS ---
 async def send_telegram_alert(chat_id: int, message: str):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": message, "parse_mode": "Markdown"}
@@ -100,9 +98,8 @@ async def send_telegram_alert(chat_id: int, message: str):
         async with httpx.AsyncClient() as client:
             await client.post(url, json=payload, timeout=5.0)
     except Exception as e:
-        print(f"Async Alert standard fail trace: {e}")
+        print(f"Async Alert failure: {e}")
 
-# --- CRYPTOGRAPHIC TELEGRAM WEBAPP AUTHS ---
 def validate_telegram_auth(init_data: str) -> Optional[dict]:
     if not init_data:
         return None
@@ -119,10 +116,8 @@ def validate_telegram_auth(init_data: str) -> Optional[dict]:
         return None
 
 # --- ROUTE TEMPLATE ENDPOINTS ---
-
 @app.get("/")
 async def root_redirect():
-    """Fixes the 404 error when hitting the raw domain root"""
     return RedirectResponse(url="/shop")
 
 @app.get("/shop")
@@ -134,23 +129,17 @@ async def serve_vendor(request: Request):
     return templates.TemplateResponse(request=request, name="vendor.html")
 
 # --- TELEGRAM BOT WEBHOOK ROUTER ---
-
 @app.post("/webhook")
 async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_db)):
-    """Catches text updates from Telegram and replies with the inline Mini App links"""
     try:
         payload = await request.json()
-        
         if "message" in payload:
             message = payload["message"]
             chat_id = message["chat"]["id"]
             user_text = message.get("text", "").strip()
             
-            # Handle the initialization sequence
             if user_text.startswith("/start"):
                 parts = user_text.split(" ", 1)
-                
-                # Check for referral deep-link parameters (e.g., /start 12345678)
                 if len(parts) > 1 and parts[1].isdigit():
                     target_vendor_id = parts[1]
                     welcome_msg = (
@@ -158,7 +147,6 @@ async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_
                         f"You have opened a direct merchant boutique page.\n\n"
                         f"👉 Tap the button below to view their active catalog elements!"
                     )
-                    
                     keyboard = {
                         "inline_keyboard": [[
                             {
@@ -168,27 +156,15 @@ async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_
                         ]]
                     }
                 else:
-                    # Generic fallback interface setup layout
                     welcome_msg = (
                         f"👋 *Welcome to the Business Hub Ecosystem!*\n\n"
                         f"Are you a customer ready to shop top-tier products, or a vendor looking to manage your boutique automation?\n\n"
                         f"Launch your workspace window instantly using the control deck below:"
                     )
-                    
                     keyboard = {
                         "inline_keyboard": [
-                            [
-                                {
-                                    "text": "🛍 Open Global Marketplace",
-                                    "web_app": {"url": f"{APP_URL}/shop"}
-                                }
-                            ],
-                            [
-                                {
-                                    "text": "🛠 Open Vendor Workspace Console",
-                                    "web_app": {"url": f"{APP_URL}/vendor"}
-                                }
-                            ]
+                            [{"text": "🛍 Open Global Marketplace", "web_app": {"url": f"{APP_URL}/shop"}}],
+                            [{"text": "🛠 Open Vendor Workspace Console", "web_app": {"url": f"{APP_URL}/vendor"}}]
                         ]
                     }
                 
@@ -203,18 +179,16 @@ async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_
                     
         return {"status": "ok"}
     except Exception as e:
-        print(f"Webhook processing failure trace: {e}")
+        print(f"Webhook error: {e}")
         return {"status": "error", "detail": str(e)}
 
-
-# --- MERCHANDISE IDENTITY CONTROLLERS ---
-
+# --- ENDPOINTS CONFIGURATION ---
 @app.get("/api/vendor/me")
 async def verify_vendor_session(request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
-        raise HTTPException(status_code=403, detail="Session tracking check broken")
+        raise HTTPException(status_code=403, detail="Session check broken")
     
     vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
     if not vendor:
@@ -241,7 +215,7 @@ async def register_or_edit_vendor(
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
-        raise HTTPException(status_code=403, detail="Security auth parameter missing")
+        raise HTTPException(status_code=403, detail="Security auth missing")
     
     logo_path = None
     if logo:
@@ -263,19 +237,11 @@ async def register_or_edit_vendor(
         if logo_path:
             vendor.logo_url = logo_path
     else:
-        vendor = Vendor(
-            vendor_id=user['id'],
-            business_name=business_name,
-            bio=bio,
-            phone_number=clean_phone,
-            logo_url=logo_path
-        )
+        vendor = Vendor(vendor_id=user['id'], business_name=business_name, bio=bio, phone_number=clean_phone, logo_url=logo_path)
         db.add(vendor)
         
     db.commit()
     return {"success": True}
-
-# --- ACTIVE CATALOG INVENTORY MANAGEMENT ENDPOINTS ---
 
 @app.post("/api/products")
 async def create_new_product(
@@ -302,15 +268,7 @@ async def create_new_product(
         with open(f"{UPLOAD_DIR}/{unique_filename}", "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
 
-    new_product = Product(
-        vendor_id=user['id'],
-        title=title,
-        price=price,
-        quantity=quantity,
-        sizes=sizes,
-        category=category.strip(),
-        image_url=image_path
-    )
+    new_product = Product(vendor_id=user['id'], title=title, price=price, quantity=quantity, sizes=sizes, category=category.strip(), image_url=image_path)
     db.add(new_product)
     db.commit()
     return {"success": True}
@@ -334,7 +292,7 @@ async def modify_product_entry(
         
     product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
     if not product:
-        raise HTTPException(status_code=404, detail="Product entity target missing")
+        raise HTTPException(status_code=404, detail="Product missing")
         
     product.title = title
     product.price = price
@@ -359,11 +317,11 @@ async def remove_catalog_product(product_id: int, request: Request, db: Session 
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
-        raise HTTPException(status_code=403, detail="Security validation failed")
+        raise HTTPException(status_code=403, detail="Validation failed")
         
     product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
     if not product:
-        raise HTTPException(status_code=404, detail="Entity target missing")
+        raise HTTPException(status_code=404, detail="Target missing")
         
     db.delete(product)
     db.commit()
@@ -377,17 +335,7 @@ async def list_vendor_products(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     products = db.query(Product).filter(Product.vendor_id == user['id']).order_by(Product.id.desc()).all()
-    return [{
-        "id": p.id,
-        "title": p.title,
-        "price": p.price,
-        "quantity": p.quantity,
-        "sizes": p.sizes,
-        "category": p.category,
-        "image_url": p.image_url
-    } for p in products]
-
-# --- MARKETPLACE & CHECKOUT HANDLING SYSTEMS ---
+    return [{"id": p.id, "title": p.title, "price": p.price, "quantity": p.quantity, "sizes": p.sizes, "category": p.category, "image_url": p.image_url} for p in products]
 
 @app.get("/api/marketplace/configs")
 async def load_storefront_configuration(vendor_id: Optional[int] = None, db: Session = Depends(get_db)):
@@ -450,31 +398,18 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
         
         prod.quantity -= item.quantity
         calculated_total += (prod.price * item.quantity)
-        items_summary.append({
-            "product_id": prod.id,
-            "title": prod.title,
-            "price": prod.price,
-            "quantity": item.quantity,
-            "size": item.size
-        })
+        items_summary.append({"product_id": prod.id, "title": prod.title, "price": prod.price, "quantity": item.quantity, "size": item.size})
 
     timestamp = int(datetime.now(timezone.utc).timestamp())
     generated_code = f"BH-{target_vendor_id}-{user['id']}-{timestamp}"
 
     new_order = Order(
-        vendor_id=target_vendor_id,
-        customer_id=user['id'],
-        customer_name=req.customer_name,
-        customer_phone=req.customer_phone,
-        delivery_address=req.delivery_address,
-        items=json.dumps(items_summary),
-        total_amount=calculated_total,
-        order_code=generated_code,
-        status="pending"
+        vendor_id=target_vendor_id, customer_id=user['id'], customer_name=req.customer_name,
+        customer_phone=req.customer_phone, delivery_address=req.delivery_address,
+        items=json.dumps(items_summary), total_amount=calculated_total, order_code=generated_code, status="pending"
     )
     db.add(new_order)
     db.commit()
-    db.refresh(new_order)
 
     alert_message = (
         f"🚨 *NEW ORDER RECEIVED!*\n\n"
@@ -485,44 +420,31 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     )
     await send_telegram_alert(target_vendor_id, alert_message)
 
-    return {
-        "success": True,
-        "order_code": new_order.order_code,
-        "total_amount": new_order.total_amount,
-        "vendor_phone": vendor_phone
-    }
-
-# --- ORDER TRACING ENGINE PIPELINES ---
+    return {"success": True, "order_code": generated_code, "total_amount": calculated_total, "vendor_phone": vendor_phone}
 
 @app.get("/api/customer/orders")
 async def view_customer_orders(request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
-        raise HTTPException(status_code=403, detail="Unauthorized status check")
+        raise HTTPException(status_code=403, detail="Unauthorized")
 
     orders = db.query(Order).filter(Order.customer_id == user['id']).order_by(Order.id.desc()).all()
-    return [{
-        "id": o.id,
-        "order_code": o.order_code,
-        "total_amount": o.total_amount,
-        "status": o.status,
-        "items": json.loads(o.items)
-    } for o in orders]
+    return [{"id": o.id, "order_code": o.order_code, "total_amount": o.total_amount, "status": o.status, "items": json.loads(o.items)} for o in orders]
 
 @app.post("/api/customer/orders/{order_id}/cancel")
 async def user_cancel_pending_order(order_id: int, request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
-        raise HTTPException(status_code=403, detail="Invalid tracking transaction")
+        raise HTTPException(status_code=403, detail="Invalid context")
         
     order = db.query(Order).filter(Order.id == order_id, Order.customer_id == user['id']).first()
     if not order:
-        raise HTTPException(status_code=404, detail="Order tracking signature absent")
+        raise HTTPException(status_code=404, detail="Order missing")
         
     if order.status != "pending":
-        raise HTTPException(status_code=400, detail="Cannot adjust inventory states once confirmed")
+        raise HTTPException(status_code=400, detail="Cannot cancel confirmed order")
         
     try:
         loaded_items = json.loads(order.items)
@@ -536,9 +458,8 @@ async def user_cancel_pending_order(order_id: int, request: Request, db: Session
     order.status = "cancelled"
     db.commit()
     
-    cancel_alert = f"⚠️ *ORDER CANCELLED BY CUSTOMER*\n\nOrder Code: `{order.order_code}`\nInventory has been automatically restocked to your catalog."
+    cancel_alert = f"⚠️ *ORDER CANCELLED BY CUSTOMER*\n\nOrder Code: `{order.order_code}`"
     await send_telegram_alert(order.vendor_id, cancel_alert)
-    
     return {"success": True}
 
 @app.get("/api/vendor/orders")
@@ -546,30 +467,21 @@ async def view_incoming_vendor_orders(request: Request, db: Session = Depends(ge
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
-        raise HTTPException(status_code=403, detail="Unauthorized tracking index access")
+        raise HTTPException(status_code=403, detail="Unauthorized")
 
     orders = db.query(Order).filter(Order.vendor_id == user['id']).order_by(Order.id.desc()).all()
-    return [{
-        "id": o.id,
-        "order_code": o.order_code,
-        "customer_name": o.customer_name,
-        "customer_phone": o.customer_phone,
-        "delivery_address": o.delivery_address,
-        "total_amount": o.total_amount,
-        "status": o.status,
-        "items": json.loads(o.items)
-    } for o in orders]
+    return [{"id": o.id, "order_code": o.order_code, "customer_name": o.customer_name, "customer_phone": o.customer_phone, "delivery_address": o.delivery_address, "total_amount": o.total_amount, "status": o.status, "items": json.loads(o.items)} for o in orders]
 
 @app.post("/api/orders/{order_id}/status")
 async def adjust_order_lifecycle(order_id: int, status_payload: dict, request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
-        raise HTTPException(status_code=403, detail="Handshake credentials absent")
+        raise HTTPException(status_code=403, detail="Credentials missing")
 
     order = db.query(Order).filter(Order.id == order_id, Order.vendor_id == user['id']).first()
     if not order:
-        raise HTTPException(404, "Target order mapping not found")
+        raise HTTPException(404, "Order not found")
 
     next_status = status_payload.get("status", "pending")
     order.status = next_status
@@ -578,5 +490,4 @@ async def adjust_order_lifecycle(order_id: int, status_payload: dict, request: R
     status_emoji = "✅" if next_status == "confirmed" else "🚚" if next_status == "delivered" else "❌"
     user_alert = f"{status_emoji} *YOUR ORDER HAS BEEN UPDATED!*\n\nCode: `{order.order_code}`\nNew Status: *{next_status.upper()}*"
     await send_telegram_alert(order.customer_id, user_alert)
-    
     return {"success": True}
