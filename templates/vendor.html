@@ -14,11 +14,11 @@
             padding: 16px;
             padding-bottom: 80px;
         }
-        .header { margin-bottom: 24px; }
-        .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
-        .header p { color: var(--tg-theme-hint-color, #8b8b8b); font-size: 15px; }
-        
-        .store-card {
+       .header { margin-bottom: 24px; }
+       .header h1 { font-size: 28px; font-weight: 700; margin-bottom: 4px; }
+       .header p { color: var(--tg-theme-hint-color, #8b8b8b); font-size: 15px; }
+
+       .store-card {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             border-radius: 20px;
             padding: 20px;
@@ -26,7 +26,7 @@
             position: relative;
             overflow: hidden;
         }
-        .store-card::before {
+       .store-card::before {
             content: '';
             position: absolute;
             top: -50%;
@@ -35,9 +35,9 @@
             height: 200%;
             background: radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%);
         }
-        .store-label { font-size: 13px; opacity: 0.9; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
-        .store-link { font-size: 14px; font-weight: 600; word-break: break-all; margin-bottom: 16px; }
-        .share-btn {
+       .store-label { font-size: 13px; opacity: 0.9; margin-bottom: 8px; text-transform: uppercase; letter-spacing: 1px; }
+       .store-link { font-size: 14px; font-weight: 600; word-break: break-all; margin-bottom: 16px; }
+       .share-btn {
             background: rgba(255,255,255,0.2);
             backdrop-filter: blur(10px);
             border: 1px solid rgba(255,255,255,0.3);
@@ -50,9 +50,9 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        .share-btn:active { transform: scale(0.98); background: rgba(255,255,255,0.3); }
-        
-        .trial-banner {
+       .share-btn:active { transform: scale(0.98); background: rgba(255,255,255,0.3); }
+
+       .trial-banner {
             background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
             border-radius: 16px;
             padding: 16px;
@@ -61,25 +61,25 @@
             justify-content: space-between;
             align-items: center;
         }
-        .trial-text { font-size: 14px; font-weight: 600; }
-        .trial-days { font-size: 24px; font-weight: 700; }
-        
-        .stats-grid {
+       .trial-text { font-size: 14px; font-weight: 600; }
+       .trial-days { font-size: 24px; font-weight: 700; }
+
+       .stats-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             margin-bottom: 24px;
         }
-        .stat-card {
+       .stat-card {
             background: var(--tg-theme-secondary-bg-color, #1a1a2e);
             border-radius: 16px;
             padding: 16px;
         }
-        .stat-icon { font-size: 24px; margin-bottom: 8px; }
-        .stat-value { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
-        .stat-label { font-size: 13px; color: var(--tg-theme-hint-color, #8b8b8b); text-transform: uppercase; letter-spacing: 0.5px; }
-        
-        .tabs {
+       .stat-icon { font-size: 24px; margin-bottom: 8px; }
+       .stat-value { font-size: 24px; font-weight: 700; margin-bottom: 4px; }
+       .stat-label { font-size: 13px; color: var(--tg-theme-hint-color, #8b8b8b); text-transform: uppercase; letter-spacing: 0.5px; }
+
+       .tabs {
             display: flex;
             gap: 8px;
             margin-bottom: 20px;
@@ -87,7 +87,7 @@
             padding: 4px;
             border-radius: 12px;
         }
-        .tab {
+       .tab {
             flex: 1;
             padding: 10px;
             border: none;
@@ -99,19 +99,19 @@
             cursor: pointer;
             transition: all 0.2s;
         }
-        .tab.active {
+       .tab.active {
             background: var(--tg-theme-button-color, #667eea);
             color: var(--tg-theme-button-text-color, #ffffff);
         }
-        
-        .section-header {
+
+       .section-header {
             display: flex;
             justify-content: space-between;
             align-items: center;
             margin-bottom: 16px;
         }
-        .section-title { font-size: 20px; font-weight: 700; }
-        .add-btn {
+       .section-title { font-size: 20px; font-weight: 700; }
+       .add-btn {
             background: var(--tg-theme-button-color, #667eea);
             color: var(--tg-theme-button-text-color, #ffffff);
             border: none;
@@ -124,13 +124,13 @@
             align-items: center;
             gap: 6px;
         }
-        
-        .products-grid {
+
+       .products-grid {
             display: grid;
             grid-template-columns: repeat(2, 1fr);
             gap: 12px;
         }
-        .card {
+       .card {
             background: var(--tg-theme-secondary-bg-color, #1a1a2e);
             border-radius: 16px;
             overflow: hidden;
@@ -142,7 +142,7 @@
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
-        .delete-btn {
+       .delete-btn {
             position: absolute;
             top: 8px;
             right: 8px;
@@ -161,20 +161,20 @@
             z-index: 10;
             transition: all 0.2s;
         }
-        .delete-btn:active { transform: scale(0.9); }
-        .card-image {
+       .delete-btn:active { transform: scale(0.9); }
+       .card-image {
             width: 100%;
             aspect-ratio: 1;
             background: #2a2a3e;
             position: relative;
             overflow: hidden;
         }
-        .card-image img {
+       .card-image img {
             width: 100%;
             height: 100%;
             object-fit: cover;
         }
-        .stock-badge {
+       .stock-badge {
             position: absolute;
             top: 8px;
             left: 8px;
@@ -185,21 +185,21 @@
             font-size: 11px;
             font-weight: 600;
         }
-        .stock-badge.low { background: rgba(255,193,7,0.9); color: #000; }
-        .stock-badge.out { background: rgba(245,87,108,0.9); color: #fff; }
-        .card-content { padding: 12px; }
-        .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .card-price { font-size: 16px; font-weight: 700; color: #38ef7d; }
-        
-        .empty-state {
+       .stock-badge.low { background: rgba(255,193,7,0.9); color: #000; }
+       .stock-badge.out { background: rgba(245,87,108,0.9); color: #fff; }
+       .card-content { padding: 12px; }
+       .card-title { font-size: 14px; font-weight: 600; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+       .card-price { font-size: 16px; font-weight: 700; color: #38ef7d; }
+
+       .empty-state {
             text-align: center;
             padding: 60px 20px;
         }
-        .empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.3; }
-        .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
-        .empty-text { color: var(--tg-theme-hint-color, #8b8b8b); font-size: 14px; }
-        
-        .fab {
+       .empty-icon { font-size: 64px; margin-bottom: 16px; opacity: 0.3; }
+       .empty-title { font-size: 18px; font-weight: 600; margin-bottom: 8px; }
+       .empty-text { color: var(--tg-theme-hint-color, #8b8b8b); font-size: 14px; }
+
+       .fab {
             position: fixed;
             bottom: 24px;
             right: 24px;
@@ -218,8 +218,59 @@
             z-index: 100;
             transition: all 0.2s;
         }
-        .fab:active { transform: scale(0.95); }
-        .hidden { display: none !important; }
+       .fab:active { transform: scale(0.95); }
+       .hidden { display: none !important; }
+
+       /* Orders styles */
+       .order-card {
+            background: var(--tg-theme-secondary-bg-color, #1a1a2e);
+            border-radius: 16px;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+       .order-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+       .order-code { font-size: 16px; font-weight: 700; }
+       .order-status {
+            padding: 4px 10px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+       .status-pending { background: rgba(255,193,7,0.2); color: #facc15; }
+       .status-paid_unconfirmed { background: rgba(59,130,246,0.2); color: #3b82f6; }
+       .status-paid_confirmed { background: rgba(16,185,129,0.2); color: #10b981; }
+       .status-delivered { background: rgba(139,92,246,0.2); color: #8b5cf6; }
+       .order-info { font-size: 14px; margin-bottom: 8px; opacity: 0.8; }
+       .order-items { font-size: 13px; margin: 12px 0; }
+       .order-item { display: flex; justify-content: space-between; margin-bottom: 4px; }
+       .order-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+        }
+       .order-total { font-size: 18px; font-weight: 700; color: #38ef7d; }
+       .order-actions { display: flex; gap: 8px; }
+       .order-btn {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: none;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+       .btn-confirm { background: #10b981; color: white; }
+       .btn-deliver { background: #8b5cf6; color: white; }
     </style>
 </head>
 <body>
@@ -266,12 +317,21 @@
     </div>
 
     <div class="tabs">
-        <button class="tab" onclick="switchTab('orders')">Orders</button>
-        <button class="tab active" onclick="switchTab('products')">Products</button>
+        <button class="tab active" onclick="switchTab('orders')">Orders</button>
+        <button class="tab" onclick="switchTab('products')">Products</button>
         <button class="tab" onclick="switchTab('analytics')">Analytics</button>
     </div>
 
-    <div id="products-section">
+    <div id="orders-section">
+        <div id="orders-list"></div>
+        <div id="orders-empty" class="empty-state">
+            <div class="empty-icon">📋</div>
+            <div class="empty-title">No orders yet</div>
+            <div class="empty-text">Orders will appear here when customers buy</div>
+        </div>
+    </div>
+
+    <div id="products-section" class="hidden">
         <div class="section-header">
             <h2 class="section-title">Products</h2>
             <button class="add-btn" onclick="addProduct()">
@@ -285,14 +345,6 @@
             <div class="empty-icon">📦</div>
             <div class="empty-title">No products yet</div>
             <div class="empty-text">Add your first product to start selling</div>
-        </div>
-    </div>
-
-    <div id="orders-section" class="hidden">
-        <div class="empty-state">
-            <div class="empty-icon">📋</div>
-            <div class="empty-title">No orders yet</div>
-            <div class="empty-text">Orders will appear here when customers buy</div>
         </div>
     </div>
 
@@ -316,6 +368,7 @@
         async function init() {
             await loadVendor();
             await loadProducts();
+            await loadOrders();
         }
 
         async function loadVendor() {
@@ -351,8 +404,6 @@
                 }
                 
                 const products = await res.json();
-                console.log('Products loaded:', products);
-                
                 const grid = document.getElementById('products-grid');
                 const emptyState = document.getElementById('empty-state');
                 
@@ -395,6 +446,66 @@
             }
         }
 
+        async function loadOrders() {
+            try {
+                const res = await fetch('/api/vendor/orders', {
+                    headers: { 'X-Telegram-Init-Data': tg.initData }
+                });
+                
+                if (!res.ok) return;
+                
+                const orders = await res.json();
+                const list = document.getElementById('orders-list');
+                const empty = document.getElementById('orders-empty');
+                
+                document.getElementById('orders').textContent = orders.length;
+                
+                const revenue = orders
+                    .filter(o => ['paid_confirmed', 'delivered'].includes(o.status))
+                    .reduce((sum, o) => sum + o.you_keep, 0);
+                document.getElementById('revenue').textContent = Math.floor(revenue).toLocaleString();
+                
+                if (orders.length === 0) {
+                    empty.style.display = 'block';
+                    list.style.display = 'none';
+                    return;
+                }
+                
+                empty.style.display = 'none';
+                list.style.display = 'block';
+                
+                list.innerHTML = orders.map(o => `
+                    <div class="order-card">
+                        <div class="order-header">
+                            <div class="order-code">${o.order_code}</div>
+                            <div class="order-status status-${o.status}">${o.status.replace('_', ' ')}</div>
+                        </div>
+                        <div class="order-info">👤 ${o.customer_name}</div>
+                        <div class="order-info">📞 ${o.customer_phone}</div>
+                        <div class="order-info">📍 ${o.delivery_address}</div>
+                        <div class="order-items">
+                            ${o.items.map(i => `
+                                <div class="order-item">
+                                    <span>${i.title} × ${i.quantity}</span>
+                                    <span>₦${(i.price * i.quantity).toLocaleString()}</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                        <div class="order-footer">
+                            <div class="order-total">₦${o.you_keep.toLocaleString()}</div>
+                            <div class="order-actions">
+                                ${o.status === 'pending' ? `<button class="order-btn btn-confirm" onclick="confirmPayment(${o.id})">Confirm Payment</button>` : ''}
+                                ${o.status === 'paid_confirmed' ? `<button class="order-btn btn-deliver" onclick="markDelivered(${o.id})">Mark Delivered</button>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (e) {
+                console.error('loadOrders error:', e);
+            }
+        }
+
         window.deleteProduct = async function(id) {
             tg.showConfirm('Delete this product permanently?', async (confirmed) => {
                 if (!confirmed) return;
@@ -418,6 +529,46 @@
             });
         }
 
+        window.confirmPayment = async function(orderId) {
+            tg.showConfirm('Confirm you received payment for this order?', async (confirmed) => {
+                if (!confirmed) return;
+                try {
+                    const res = await fetch(`/api/vendor/orders/${orderId}/confirm-payment`, {
+                        method: 'POST',
+                        headers: { 'X-Telegram-Init-Data': tg.initData }
+                    });
+                    if (res.ok) {
+                        tg.HapticFeedback.notificationOccurred('success');
+                        await loadOrders();
+                    } else {
+                        tg.showAlert('Failed to confirm');
+                    }
+                } catch (e) {
+                    tg.showAlert('Network error');
+                }
+            });
+        }
+
+        window.markDelivered = async function(orderId) {
+            tg.showConfirm('Mark this order as delivered?', async (confirmed) => {
+                if (!confirmed) return;
+                try {
+                    const res = await fetch(`/api/vendor/orders/${orderId}/deliver`, {
+                        method: 'POST',
+                        headers: { 'X-Telegram-Init-Data': tg.initData }
+                    });
+                    if (res.ok) {
+                        tg.HapticFeedback.notificationOccurred('success');
+                        await loadOrders();
+                    } else {
+                        tg.showAlert('Failed to mark delivered');
+                    }
+                } catch (e) {
+                    tg.showAlert('Network error');
+                }
+            });
+        }
+
         window.addProduct = function() {
             tg.HapticFeedback.impactOccurred('light');
             tg.close();
@@ -433,8 +584,8 @@
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             
-            document.getElementById('products-section').classList.add('hidden');
             document.getElementById('orders-section').classList.add('hidden');
+            document.getElementById('products-section').classList.add('hidden');
             document.getElementById('analytics-section').classList.add('hidden');
             document.getElementById(`${tab}-section`).classList.remove('hidden');
         }
