@@ -40,18 +40,16 @@ class Product(Base):
 
 class Order(Base):
     __tablename__ = "orders"
-    
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    vendor_id = Column(BigInteger, ForeignKey("vendors.vendor_id"))
-    customer_id = Column(BigInteger)
-    customer_name = Column(String(255))
-    customer_phone = Column(String(20))
-    delivery_address = Column(Text)
-    items = Column(Text, default='[]')
-    total_amount = Column(Numeric(10, 2))
-    commission = Column(Numeric(10, 2))
-    paystack_reference = Column(String(255), unique=True)
-    status = Column(String(50), default="pending")
-    created_at = Column(DateTime(timezone=True), server_default=func.now())
-    
+
+    id = Column(Integer, primary_key=True, index=True)
+    vendor_id = Column(Integer, ForeignKey("vendors.vendor_id"), nullable=False)
+    customer_name = Column(String(200), nullable=False)
+    customer_phone = Column(String(20), nullable=False)
+    delivery_address = Column(Text, nullable=False)
+    items = Column(Text, default='[]') # JSON string
+    total_amount = Column(Float, nullable=False)
+    order_code = Column(String(100), unique=True, nullable=False) # Changed from paystack_reference
+    status = Column(String(20), default="pending") # pending, confirmed, delivered, cancelled
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
     vendor = relationship("Vendor", back_populates="orders")
