@@ -296,8 +296,7 @@
 
         // Boot and routing analysis engine hook
         async function bootStorefront() {
-            // Extract the deep link startup parameter
-            const startupParamVendorId = tg.initDataUnsafe.start_param;
+            const startupParamVendorId = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) ? tg.initDataUnsafe.start_param : null;
             let apiUrl = "/api/marketplace/configs";
             if (startupParamVendorId) apiUrl += `?vendor_id=${startupParamVendorId}`;
 
@@ -310,7 +309,6 @@
                 document.getElementById("marketplace-shell").style.display = "block";
 
                 if (config.mode === "store") {
-                    // Initialize Locked Storefront View
                     document.getElementById("discover-header-block").style.display = "none";
                     document.getElementById("vendor-horizontal-scroller-box").style.display = "none";
                     document.getElementById("feed-context-title").innerText = "Boutique Catalog";
@@ -320,12 +318,11 @@
                     document.getElementById("boutique-bio").innerText = config.vendor.bio || "No boutique bio updated.";
                     document.getElementById("boutique-logo").src = config.vendor.logo || "";
                     
-                    catalogMasterData = config.products;
+                    catalogMasterData = config.products || [];
                 } else {
-                    // Initialize Global Shared Feed View
-                    catalogMasterData = config.products;
-                    compileDiscoveryCategories(config.products);
-                    compileVendorsCarousel(config.vendors);
+                    catalogMasterData = config.products || [];
+                    compileDiscoveryCategories(catalogMasterData);
+                    compileVendorsCarousel(config.vendors || []);
                 }
 
                 filteredCatalog = [...catalogMasterData];
@@ -334,6 +331,8 @@
 
             } catch (err) {
                 console.error("Storefront boot failure state trace:", err);
+                document.getElementById("splash-screen").style.display = "none";
+                document.getElementById("marketplace-shell").style.display = "block";
             }
         }
 
@@ -388,7 +387,8 @@
         }
 
         function filterCatalogGrid() {
-            const query = document.getElementById("global-search") ? document.getElementById("global-search").value.toLowerCase() : "";
+            const searchField = document.getElementById("global-search");
+            const query = searchField ? searchField.value.toLowerCase() : "";
             
             filteredCatalog = catalogMasterData.filter(p => {
                 const matchesQuery = p.title.toLowerCase().includes(query);
@@ -436,7 +436,6 @@
             document.getElementById("modal-p-title").innerText = product.title;
             document.getElementById("modal-p-price").innerText = `₦${product.price.toLocaleString()}`;
 
-            // Compile Size Options UI
             const sizeRow = document.getElementById("modal-sizes-row");
             sizeRow.innerHTML = "";
             if (product.sizes && product.sizes.trim().length > 0) {
@@ -459,7 +458,6 @@
                 selectedSizeString = "Standard";
             }
 
-            // Check if product is available in stock
             const actionBtn = document.getElementById("drawer-action-main-btn");
             if (product.quantity <= 0) {
                 document.getElementById("modal-qty-container-section").style.display = "none";
@@ -496,7 +494,6 @@
                 return;
             }
 
-            // We wipe the cart first so that users only purchase items from ONE vendor at a time
             localCartArray = [{
                 product_id: runningTargetProductObj.id,
                 title: runningTargetProductObj.title,
@@ -561,7 +558,6 @@
                     
                     tg.HapticFeedback.notificationOccurred('success');
 
-                    // AUTOMATED WHATSAPP HANDSHAKE REDIRECT
                     const firstItem = orderPayload.items[0];
                     const rawText = `Hello, I just placed an order via Business Hub! 🛍️\n\n*Order Code:* ${data.order_code}\n*Item:* ${firstItem.quantity}x ${firstItem.title} (Size: ${firstItem.size})\n*Total Value:* ₦${data.total_amount.toLocaleString()}\n\nPlease provide payment confirmation details.`;
                     const compiledWhatsappUrl = `https://wa.me/${data.vendor_phone}?text=${encodeURIComponent(rawText)}`;
@@ -571,7 +567,7 @@
                         message: "Your order has been registered in our database. Tap continue to open WhatsApp and send your receipt details straight to the vendor.",
                         buttons: [{ type: "default", text: "Open WhatsApp Chat" }]
                     }, () => {
-                        tg.openWhatsApp(compiledWhatsappUrl);
+                        tg.openLink(compiledWhatsappUrl);
                     });
                 } else {
                     tg.showAlert(`Checkout failed: ${data.detail || "Insufficient stock or server discrepancy"}`);
