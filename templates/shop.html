@@ -30,12 +30,6 @@
             animation: cardIn 0.5s ease backwards;
             cursor: pointer;
         }
-        .product:nth-child(1) { animation-delay: 0.1s; }
-        .product:nth-child(2) { animation-delay: 0.2s; }
-        .product:nth-child(3) { animation-delay: 0.3s; }
-        .product:nth-child(4) { animation-delay: 0.4s; }
-        .product:nth-child(5) { animation-delay: 0.5s; }
-        .product:nth-child(6) { animation-delay: 0.6s; }
         @keyframes cardIn { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         
         .product:active { transform: scale(0.95); }
@@ -46,18 +40,11 @@
             font-size: 52px; position: relative; overflow: hidden;
         }
         .product-img img { width: 100%; height: 100%; object-fit: cover; }
-        .product-img::after {
-            content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%;
-            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.15), transparent);
-            transform: rotate(45deg); animation: shimmer 3s infinite;
-        }
-        @keyframes shimmer { 0% { transform: translateX(-100%) rotate(45deg); } 100% { transform: translateX(100%) rotate(45deg); } }
         
         .product-body { padding: 14px; }
-        .product-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .product-title { font-size: 15px; font-weight: 600; margin-bottom: 6px; line-height: 1.3; }
         .product-price { font-size: 17px; font-weight: 800; color: var(--tg-theme-button-color, #007aff); }
         .product-stock { font-size: 12px; opacity: 0.5; margin-top: 4px; }
-        .product-stock.low { color: #f59e0b; opacity: 1; font-weight: 600; }
         
         .cart-bar {
             position: fixed; bottom: 0; left: 0; right: 0;
@@ -65,203 +52,187 @@
             border-top: 1px solid var(--tg-theme-hint-color, #e5e5ea);
             padding: 16px; display: none; align-items: center; gap: 12px;
             backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            animation: slideUpBar 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
             z-index: 100;
         }
-        @keyframes slideUpBar { from { transform: translateY(100%); } to { transform: translateY(0); } }
         .cart-bar.show { display: flex; }
         .cart-info { flex: 1; }
         .cart-info strong { font-size: 18px; font-weight: 800; }
         .cart-info span { opacity: 0.6; font-size: 13px; display: block; margin-top: 2px; }
         
-        .empty { text-align: center; padding: 100px 20px; animation: fadeIn 0.6s ease; }
-        .empty-icon { font-size: 72px; margin-bottom: 16px; opacity: 0.2; animation: float 3s ease-in-out infinite; }
-        @keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        
-        .skeleton { background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%); background-size: 200% 100%; animation: loading 1.5s infinite; border-radius: 12px; }
-        @keyframes loading { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-        
-        .modal { 
-            position: fixed; inset: 0; background: rgba(0,0,0,0.5); 
-            display: none; align-items: flex-end; justify-content: center;
-            z-index: 200; animation: fadeIn 0.2s ease;
+        .empty { text-align: center; padding: 100px 20px; }
+        .empty-icon { font-size: 72px; margin-bottom: 16px; opacity: 0.2; }
+
+        /* Modal styling for sizing options */
+        .modal {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.5); display: none; align-items: flex-end; z-index: 1000;
         }
         .modal.show { display: flex; }
         .modal-content {
-            background: var(--tg-theme-bg-color, #fff);
-            width: 100%; max-width: 600px; border-radius: 20px 20px 0 0;
-            padding: 24px; animation: slideUpModal 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-            max-height: 85vh; overflow-y: auto;
+            background: var(--tg-theme-bg-color, #fff); width: 100%;
+            border-radius: 24px 24px 0 0; padding: 24px;
+            animation: slideUp 0.3s ease;
         }
-        @keyframes slideUpModal { from { transform: translateY(100%); } to { transform: translateY(0); } }
-        .modal-img { width: 100%; aspect-ratio: 1; border-radius: 16px; object-fit: cover; margin-bottom: 16px; }
-        .modal-title { font-size: 24px; font-weight: 700; margin-bottom: 8px; }
-        .modal-price { font-size: 28px; font-weight: 800; color: var(--tg-theme-button-color, #007aff); margin-bottom: 16px; }
-        .modal-desc { opacity: 0.7; line-height: 1.5; margin-bottom: 20px; }
-        .size-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
-        .size-btn { 
-            padding: 12px; border: 2px solid var(--tg-theme-hint-color, #e5e5ea);
-            border-radius: 12px; background: transparent; font-weight: 600;
-            cursor: pointer; transition: all 0.2s;
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+        .modal-title { font-size: 20px; font-weight: 700; margin-bottom: 16px; }
+        .size-options { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .size-btn {
+            border: 1px solid var(--tg-theme-hint-color, #ccc); background: none;
+            padding: 8px 16px; border-radius: 10px; color: var(--tg-theme-text-color, #000);
+            cursor: pointer; font-weight: 600;
         }
-        .size-btn.active { 
+        .size-btn.selected {
             background: var(--tg-theme-button-color, #007aff);
             color: var(--tg-theme-button-text-color, #fff);
             border-color: var(--tg-theme-button-color, #007aff);
         }
-        .qty-control { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
-        .qty-btn { 
-            width: 44px; height: 44px; border-radius: 12px; 
-            border: none; background: var(--tg-theme-secondary-bg-color, #f0f0f0);
-            font-size: 20px; font-weight: 700; cursor: pointer;
+        .qty-selector { display: flex; align-items: center; gap: 16px; margin-bottom: 24px; }
+        .qty-btn {
+            width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--tg-theme-hint-color, #ccc);
+            background: none; font-size: 18px; cursor: pointer; color: var(--tg-theme-text-color, #000);
         }
-        .qty-value { font-size: 20px; font-weight: 700; min-width: 40px; text-align: center; }
+        .add-to-cart-btn {
+            width: 100%; background: var(--tg-theme-button-color, #007aff);
+            color: var(--tg-theme-button-text-color, #fff); border: none;
+            padding: 14px; border-radius: 14px; font-weight: 700; font-size: 16px; cursor: pointer;
+        }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1 id="storeName">Loading...</h1>
-            <p>Tap any product to add to cart</p>
-        </div>
-        <div id="products" class="grid">
-            <div class="product">
-                <div class="product-img skeleton"></div>
-                <div class="product-body">
-                    <div class="skeleton" style="height:16px;width:80%;margin-bottom:8px;"></div>
-                    <div class="skeleton" style="height:16px;width:40%;"></div>
-                </div>
-            </div>
-            <div class="product">
-                <div class="product-img skeleton"></div>
-                <div class="product-body">
-                    <div class="skeleton" style="height:16px;width:80%;margin-bottom:8px;"></div>
-                    <div class="skeleton" style="height:16px;width:40%;"></div>
-                </div>
-            </div>
-        </div>
-    </div>
 
-    <div id="cartBar" class="cart-bar">
-        <div class="cart-info">
-            <strong id="cartTotal">₦0</strong>
-            <span id="cartCount">0 items</span>
-        </div>
+<div class="container">
+    <div class="header">
+        <h1 id="shopTitle">Marketplace</h1>
+        <p>Select products to build your cart</p>
     </div>
+    <div id="products" class="grid"></div>
+</div>
 
-    <div id="modal" class="modal" onclick="closeModal(event)">
-        <div class="modal-content" onclick="event.stopPropagation()">
-            <img id="modalImg" class="modal-img" src="" alt="">
-            <div class="modal-title" id="modalTitle"></div>
-            <div class="modal-price" id="modalPrice"></div>
-            <div class="modal-desc" id="modalDesc"></div>
-            <div style="font-weight: 600; margin-bottom: 12px;">Select Size</div>
-            <div class="size-grid" id="sizeGrid"></div>
-            <div style="font-weight: 600; margin-bottom: 12px;">Quantity</div>
-            <div class="qty-control">
-                <button class="qty-btn" onclick="changeQty(-1)">−</button>
-                <div class="qty-value" id="qtyValue">1</div>
-                <button class="qty-btn" onclick="changeQty(1)">+</button>
-            </div>
-        </div>
+<div id="cartBar" class="cart-bar">
+    <div class="cart-info">
+        <strong id="cartTotal">₦0</strong>
+        <span id="cartCount">0 items selected</span>
     </div>
+</div>
+
+<div id="productModal" class="modal" onclick="closeModal(event)">
+    <div class="modal-content" onclick="event.stopPropagation()">
+        <div id="modalProductTitle" class="modal-title">Select Options</div>
+        <div style="font-size: 14px; opacity: 0.6; margin-bottom: 8px;">Size</div>
+        <div id="sizeOptions" class="size-options"></div>
+        <div style="font-size: 14px; opacity: 0.6; margin-bottom: 8px;">Quantity</div>
+        <div class="qty-selector">
+            <button class="qty-btn" onclick="updateQty(-1)">-</button>
+            <span id="qtyValue" style="font-size: 18px; font-weight: 700;">1</span>
+            <button class="qty-btn" onclick="updateQty(1)">+</button>
+        </div>
+        <button class="add-to-cart-btn" onclick="addToCart()">Add to Bag</button>
+    </div>
+</div>
 
 <script>
     const tg = window.Telegram.WebApp;
     tg.ready();
     tg.expand();
-    tg.setHeaderColor('secondary_bg_color');
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const vendorId = urlParams.get('vendor_id') || urlParams.get('tgWebAppStartParam');
     
-    const vendorId = window.location.pathname.split('/').pop();
     let cart = [];
-    let products = [];
+    let productsData = [];
     let selectedProduct = null;
-    let selectedSize = null;
+    let selectedSize = 'One Size';
     let selectedQty = 1;
 
     async function init() {
         try {
-            const res = await fetch(`/api/shop/${vendorId}/products`);
-            if (!res.ok) throw new Error('Shop not found');
+            // Adjust public endpoints dynamic check
+            const endpoint = vendorId ? `/api/shop/${vendorId}/products` : '/api/marketplace/products';
+            const res = await fetch(endpoint);
+            if (!res.ok) throw new Error();
+            
             const data = await res.json();
-            document.getElementById('storeName').textContent = data.vendor_name;
-            products = data.products;
+            
+            if (vendorId) {
+                document.getElementById('shopTitle').textContent = data.vendor_name;
+                productsData = data.products;
+            } else {
+                productsData = data;
+            }
+
             renderProducts();
         } catch (e) {
             document.getElementById('products').innerHTML = `
-                <div class="empty">
-                    <div class="empty-icon">😞</div>
-                    <strong>Store Unavailable</strong><br>
-                    <span style="opacity:0.6">This shop is closed or expired</span>
+                <div class="empty" style="grid-column: 1/-1;">
+                    <div class="empty-icon">🛍️</div>
+                    <h3>Store currently unavailable</h3>
                 </div>`;
         }
     }
 
     function renderProducts() {
-        if (products.length === 0) {
-            document.getElementById('products').innerHTML = `
-                <div class="empty">
+        const container = document.getElementById('products');
+        if (productsData.length === 0) {
+            container.innerHTML = `
+                <div class="empty" style="grid-column: 1/-1;">
                     <div class="empty-icon">📦</div>
-                    <strong>No products yet</strong><br>
-                    <span style="opacity:0.6">Check back soon</span>
+                    <h3>No products available</h3>
                 </div>`;
             return;
         }
-        document.getElementById('products').innerHTML = products.map(p => `
-            <div class="product" onclick="openModal(${p.id})">
+
+        container.innerHTML = productsData.map(p => `
+            <div class="product" onclick="openProduct(${p.id})">
                 <div class="product-img">
-                    ${p.telegram_file_id ? '📷' : '🛍️'}
+                    ${p.telegram_file_id ? `<img src="/file/${p.telegram_file_id}">` : '👕'}
                 </div>
                 <div class="product-body">
                     <div class="product-title">${p.title}</div>
                     <div class="product-price">₦${p.price.toLocaleString()}</div>
-                    <div class="product-stock ${p.quantity < 3 ? 'low' : ''}">${p.quantity} left</div>
+                    <div class="product-stock ${p.quantity <= 3 ? 'low' : ''}">Stock: ${p.quantity}</div>
                 </div>
             </div>
         `).join('');
     }
 
-    function openModal(id) {
-        selectedProduct = products.find(p => p.id === id);
-        if (!selectedProduct || selectedProduct.quantity === 0) return;
-        
-        tg.HapticFeedback.impactOccurred('light');
+    function openProduct(id) {
+        selectedProduct = productsData.find(p => p.id === id);
+        if (!selectedProduct) return;
+
+        document.getElementById('modalProductTitle').textContent = selectedProduct.title;
         selectedQty = 1;
-        selectedSize = selectedProduct.sizes.split(',')[0].trim();
-        
-        document.getElementById('modalImg').src = 'https://via.placeholder.com/500x500.png?text=Product';
-        document.getElementById('modalTitle').textContent = selectedProduct.title;
-        document.getElementById('modalPrice').textContent = `₦${selectedProduct.price.toLocaleString()}`;
-        document.getElementById('modalDesc').textContent = selectedProduct.description || 'No description available';
         document.getElementById('qtyValue').textContent = selectedQty;
-        
-        const sizes = selectedProduct.sizes.split(',').map(s => s.trim());
-        document.getElementById('sizeGrid').innerHTML = sizes.map(s => `
-            <button class="size-btn ${s === selectedSize ? 'active' : ''}" onclick="selectSize('${s}')">${s}</button>
-        `).join('');
-        
-        document.getElementById('modal').classList.add('show');
-        tg.MainButton.setText('Add to Cart').show().onClick(addToCart);
-    }
 
-    function closeModal(e) {
-        if (e.target.id === 'modal') {
-            document.getElementById('modal').classList.remove('show');
-            tg.MainButton.hide();
+        const sizeContainer = document.getElementById('sizeOptions');
+        if (selectedProduct.sizes && selectedProduct.sizes.trim().length > 0) {
+            const sizeList = selectedProduct.sizes.split(',').map(s => s.trim());
+            selectedSize = sizeList[0];
+            sizeContainer.innerHTML = sizeList.map((s, idx) => `
+                <button class="size-btn ${idx === 0 ? 'selected' : ''}" onclick="selectSize(this, '${s}')">${s}</button>
+            `).join('');
+        } else {
+            selectedSize = 'One Size';
+            sizeContainer.innerHTML = `<button class="size-btn selected" disabled>One Size</button>`;
         }
+
+        document.getElementById('productProductModal');
+        document.getElementById('productModal').classList.add('show');
+        tg.HapticFeedback.impactOccurred('light');
     }
 
-    function selectSize(size) {
+    function closeModal() {
+        document.getElementById('productModal').classList.remove('show');
+    }
+
+    function selectSize(btn, size) {
+        document.querySelectorAll('.size-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
         selectedSize = size;
-        document.querySelectorAll('.size-btn').forEach(btn => {
-            btn.classList.toggle('active', btn.textContent === size);
-        });
-        tg.HapticFeedback.selectionChanged();
+        tg.HapticFeedback.impactOccurred('light');
     }
 
-    function changeQty(delta) {
-        const newQty = selectedQty + delta;
+    function updateQty(amt) {
+        const newQty = selectedQty + amt;
         if (newQty < 1 || newQty > selectedProduct.quantity) return;
         selectedQty = newQty;
         document.getElementById('qtyValue').textContent = selectedQty;
@@ -269,35 +240,42 @@
     }
 
     function addToCart() {
-        if (!selectedProduct || !selectedSize) return;
-        
-        tg.HapticFeedback.notificationOccurred('success');
-        const existing = cart.find(i => i.product_id === selectedProduct.id && i.size === selectedSize);
-        if (existing) {
-            existing.quantity += selectedQty;
+        if (!selectedProduct) return;
+
+        const existingItem = cart.find(c => c.product_id === selectedProduct.id && c.size === selectedSize);
+        if (existingItem) {
+            if (existingItem.quantity + selectedQty > selectedProduct.quantity) {
+                tg.showAlert('Cannot add more than available stock');
+                return;
+            }
+            existingItem.quantity += selectedQty;
         } else {
-            cart.push({ 
-                product_id: selectedProduct.id, 
-                quantity: selectedQty, 
-                size: selectedSize, 
-                price: selectedProduct.price, 
-                title: selectedProduct.title 
+            cart.push({
+                product_id: selectedProduct.id,
+                title: selectedProduct.title,
+                price: selectedProduct.price,
+                quantity: selectedQty,
+                size: selectedSize
             });
         }
+
+        closeModal();
         updateCart();
-        document.getElementById('modal').classList.remove('show');
-        tg.MainButton.hide();
+        tg.HapticFeedback.notificationOccurred('success');
     }
 
     function updateCart() {
-        const total = cart.reduce((sum, i) => sum + i.price * i.quantity, 0);
-        const count = cart.reduce((sum, i) => sum + i.quantity, 0);
-        
+        const total = cart.reduce((acc, c) => acc + (c.price * c.quantity), 0);
+        const count = cart.reduce((acc, c) => acc + c.quantity, 0);
+
+        document.getElementById('cartTotal').textContent = `₦${total.toLocaleString()}`;
+        document.getElementById('cartCount').textContent = `${count} item${count > 1 ? 's' : ''} selected`;
+
         if (count > 0) {
             document.getElementById('cartBar').classList.add('show');
-            document.getElementById('cartTotal').textContent = `₦${total.toLocaleString()}`;
-            document.getElementById('cartCount').textContent = `${count} item${count > 1 ? 's' : ''}`;
-            tg.MainButton.setText(`Checkout ₦${total.toLocaleString()}`).show().onClick(checkout);
+            tg.MainButton.setText('PROCEED TO CHECKOUT');
+            tg.MainButton.show();
+            tg.MainButton.onClick(checkout);
         } else {
             document.getElementById('cartBar').classList.remove('show');
             tg.MainButton.hide();
@@ -317,9 +295,11 @@
         try {
             const res = await fetch('/api/checkout', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'X-Telegram-Init-Data': tg.initData // Auth validation initialization header
+                },
                 body: JSON.stringify({
-                    vendor_id: parseInt(vendorId),
                     customer_name: name,
                     customer_phone: phone,
                     delivery_address: address,
@@ -330,18 +310,36 @@
                     }))
                 })
             });
+
+            if (!res.ok) {
+                const err = await res.json();
+                throw new Error(err.detail || 'Checkout processing failed');
+            }
+            
             const data = await res.json();
-            tg.openLink(data.payment_url);
+            tg.HapticFeedback.notificationOccurred('success');
+            tg.showAlert('Order Placed Successfully!');
+
+            // Take the first generated sub-order split to handle payment processing instantly
+            if (data.orders && data.orders.length > 0) {
+                const targetOrder = data.orders[0];
+                const msgText = `Hello, I just placed an order via Business Hub!\n\n*Order Code:* ${targetOrder.order_code}\n*Total Value:* ₦${targetOrder.total.toLocaleString()}\n\nPlease provide payment confirmations details.`;
+                const whatsappUrl = `https://wa.me/${targetOrder.vendor_phone}?text=${encodeURIComponent(msgText)}`;
+                
+                tg.openLink(whatsappUrl);
+            }
+            
             cart = [];
             updateCart();
         } catch (e) {
-            tg.showAlert('Checkout failed. Try again.');
+            tg.showAlert(e.message || 'Checkout failed. Try again.');
         } finally {
             tg.MainButton.hideProgress();
+            tg.MainButton.offClick(checkout); // Prevent listener double-firing traps
         }
     }
 
     init();
 </script>
 </body>
-  </html>
+</html>
