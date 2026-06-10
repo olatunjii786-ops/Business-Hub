@@ -2,8 +2,8 @@ import os
 import json
 import hmac
 import hashlib
-import shutil
 import httpx
+import base64  # 👈 Added for permanent database image storage
 from datetime import datetime, timezone
 from typing import List, Optional
 from urllib.parse import parse_qsl
@@ -11,7 +11,6 @@ from pydantic import BaseModel
 from fastapi import FastAPI, Request, HTTPException, Depends, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.templating import Jinja2Templates
-from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse
 from sqlalchemy import create_engine, Column, Integer, String, Float, Text, BigInteger, Boolean
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
@@ -30,9 +29,7 @@ BOT_USERNAME = "isaacbusinessbot"
 app = FastAPI(title="Business Hub Central Engine")
 templates = Jinja2Templates(directory="templates")
 
-UPLOAD_DIR = "uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
-app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+# Note: Local file storage configurations have been removed to avoid Render Free Tier container reset wipes.
 
 app.add_middleware(
     CORSMiddleware,
@@ -61,7 +58,7 @@ class Vendor(Base):
     business_name = Column(String(255), nullable=False)
     bio = Column(Text, nullable=True)
     phone_number = Column(String(20), nullable=False)
-    logo_url = Column(Text, nullable=True)
+    logo_url = Column(Text, nullable=True)  # Holds Base64 Data String
     is_approved = Column(Boolean, default=True)
 
 class Product(Base):
@@ -73,7 +70,7 @@ class Product(Base):
     quantity = Column(Integer, default=1)
     sizes = Column(String(255), nullable=True)
     category = Column(String(100), default="General")
-    image_url = Column(Text, nullable=True)
+    image_url = Column(Text, nullable=True)  # Holds Base64 Data String
 
 class Order(Base):
     __tablename__ = "orders"
@@ -217,13 +214,11 @@ async def register_or_edit_vendor(
     if not user:
         raise HTTPException(status_code=403, detail="Security auth missing")
     
-    logo_path = None
-    if logo:
-        file_extension = os.path.splitext(logo.filename)[1]
-        unique_filename = f"logo_{user['id']}{file_extension}"
-        logo_path = f"/{UPLOAD_DIR}/{unique_filename}"
-        with open(f"{UPLOAD_DIR}/{unique_filename}", "wb") as buffer:
-            shutil.copyfileobj(logo.file, buffer)
+    logo_data_url = None
+    if logo and logo.filename:
+        file_contents = await logo.read()
+        encoded = base64.b64encode(file_contents).decode("utf-8")
+        logo_data_url = f"data:{logo.content_type};base64,{encoded}"
 
     clean_phone = "".join(c for c in phone_number if c.isdigit())
     if clean_phone.startswith("0") and len(clean_phone) == 11:
@@ -234,10 +229,16 @@ async def register_or_edit_vendor(
         vendor.business_name = business_name
         vendor.bio = bio
         vendor.phone_number = clean_phone
-        if logo_path:
-            vendor.logo_url = logo_path
+        if logo_data_url:
+            vendor.logo_url = logo_data_url
     else:
-        vendor = Vendor(vendor_id=user['id'], business_name=business_name, bio=bio, phone_number=clean_phone, logo_url=logo_path)
+        vendor = Vendor(
+            vendor_id=user['id'], 
+            business_name=business_name, 
+            bio=bio, 
+            phone_number=clean_phone, 
+            logo_url=logo_data_url
+        )
         db.add(vendor)
         
     db.commit()
@@ -259,16 +260,21 @@ async def create_new_product(
     if not user:
         raise HTTPException(status_code=403, detail="Invalid request parameters")
     
-    image_path = None
-    if image:
-        timestamp = int(datetime.now(timezone.utc).timestamp())
-        file_extension = os.path.splitext(image.filename)[1]
-        unique_filename = f"prod_{user['id']}_{timestamp}{file_extension}"
-        image_path = f"/{UPLOAD_DIR}/{unique_filename}"
-        with open(f"{UPLOAD_DIR}/{unique_filename}", "wb") as buffer:
-            shutil.copyfileobj(image.file, buffer)
+    image_data_url = None
+    if image and image.filename:
+        file_contents = await image.read()
+        encoded = base64.b64encode(file_contents).decode("utf-8")
+        image_data_url = f"data:{image.content_type};base64,{encoded}"
 
-    new_product = Product(vendor_id=user['id'], title=title, price=price, quantity=quantity, sizes=sizes, category=category.strip(), image_url=image_path)
+    new_product = Product(
+        vendor_id=user['id'], 
+        title=title, 
+        price=price, 
+        quantity=quantity, 
+        sizes=sizes, 
+        category=category.strip(), 
+        image_url=image_data_url
+    )
     db.add(new_product)
     db.commit()
     return {"success": True}
@@ -300,14 +306,11 @@ async def modify_product_entry(
     product.sizes = sizes
     product.category = category.strip()
     
-    if image:
-        timestamp = int(datetime.now(timezone.utc).timestamp())
-        file_extension = os.path.splitext(image.filename)[1]
-        unique_filename = f"prod_{user['id']}_{timestamp}{file_extension}"
-        image_path = f"/{UPLOAD_DIR}/{unique_filename}"
-        with open(f"{UPLOAD_DIR}/{unique_filename}", "wb") as buffer:
-            shutil.copyfileobj(image.file, buffer)
-        product.image_url = image_path
+    if image and image.filename:
+        file_contents = await image.read()
+        encoded = base64.b64encode(file_contents).decode("utf-8")
+        image_data_url = f"data:{image.content_type};base64,{encoded}"
+        product.image_url = image_data_url
         
     db.commit()
     return {"success": True}
@@ -481,7 +484,7 @@ async def adjust_order_lifecycle(order_id: int, status_payload: dict, request: R
 
     order = db.query(Order).filter(Order.id == order_id, Order.vendor_id == user['id']).first()
     if not order:
-        raise HTTPException(404, "Order not found")
+         raise HTTPException(404, "Order not found")
 
     next_status = status_payload.get("status", "pending")
     order.status = next_status
