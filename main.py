@@ -112,6 +112,10 @@ def validate_telegram_auth(init_data: str) -> Optional[dict]:
     except Exception:
         return None
 
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy"}
+    
 # --- ROUTE TEMPLATE ENDPOINTS ---
 @app.get("/")
 async def root_redirect():
