@@ -90,7 +90,7 @@ class Order(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --- PYNANTIC SCHEMAS ---
+# --- PANTIC SCHEMAS ---
 class CheckoutItem(BaseModel):
     product_id: int
     quantity: int
@@ -135,7 +135,7 @@ def validate_telegram_auth(init_data: str) -> Optional[dict]:
         return None
 
 # --- FLUTTERWAVE CORE UTILS ---
-async def generate_flw_subaccount(bank_code: str, account_number: str, business_name: str, phone: str) -> Optional[str]:
+async def generate_flw_subaccount(bank_code: str, account_number: str, business_name: str, phone: str, vendor_id: int) -> Optional[str]:
     """Helper module to handle upstream subaccount pipelines cleanly with flat 0-fee commissions"""
     if not FLW_SECRET_KEY:
         print("Split implementation failed: FLUTTERWAVE_SECRET_KEY missing from environment properties context.")
@@ -146,11 +146,16 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
         "Authorization": f"Bearer {FLW_SECRET_KEY}",
         "Content-Type": "application/json"
     }
+    
+    # Generate a functional workspace communication alias to satisfy gateway constraints
+    fallback_email = f"vendor_{vendor_id}@businesshub.internal"
+    
     payload = {
         "account_bank": bank_code,
         "account_number": account_number,
         "business_name": business_name,
         "business_mobile": phone,
+        "business_email": fallback_email,
         "country": "NG",
         "split_type": "flat",
         "split_value": 0  # 0 platform commission means 100% net goes to vendor wallet maps
@@ -257,7 +262,8 @@ async def verify_vendor_session(request: Request, db: Session = Depends(get_db))
             bank_code=vendor.bank_code,
             account_number=vendor.account_number,
             business_name=vendor.business_name,
-            phone=vendor.phone_number
+            phone=vendor.phone_number,
+            vendor_id=vendor.vendor_id
         )
         if sub_id:
             vendor.subaccount_id = sub_id
@@ -313,7 +319,7 @@ async def register_or_edit_vendor(
             
         # Trigger creation if bank profile is updated or freshly established
         if not vendor or vendor.bank_code != bank_code or vendor.account_number != account_number:
-            created_id = await generate_flw_subaccount(bank_code, account_number, business_name, clean_phone)
+            created_id = await generate_flw_subaccount(bank_code, account_number, business_name, clean_phone, user['id'])
             if not created_id and not target_subaccount_id:
                 raise HTTPException(status_code=400, detail="Failed to register split settlement parameters with Flutterwave.")
             if created_id:
@@ -366,7 +372,7 @@ async def upgrade_legacy_vendor_payout(
     if len(payload.account_number) != 10 or not payload.account_number.isdigit():
         raise HTTPException(status_code=400, detail="Invalid account formatting sequence.")
         
-    created_id = await generate_flw_subaccount(payload.bank_code, payload.account_number, vendor.business_name, vendor.phone_number)
+    created_id = await generate_flw_subaccount(payload.bank_code, payload.account_number, vendor.business_name, vendor.phone_number, vendor.vendor_id)
     if not created_id:
         raise HTTPException(status_code=400, detail="Upstream banking verification trace failed on split initialization.")
         
