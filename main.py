@@ -90,7 +90,7 @@ class Order(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# --- PANTIC SCHEMAS ---
+# --- PYDANTIC SCHEMAS ---
 class CheckoutItem(BaseModel):
     product_id: int
     quantity: int
@@ -134,9 +134,32 @@ def validate_telegram_auth(init_data: str) -> Optional[dict]:
     except Exception:
         return None
 
+# --- AUTOMATED BANK REGISTRY DISCOVERY ENDPOINT ---
+@app.get("/api/banks")
+async def get_supported_banks():
+    """Returns official live bank registry to populate WebApp dropdown selectors dynamically"""
+    if not FLW_SECRET_KEY:
+        return []
+        
+    url = "https://api.flutterwave.com/v3/banks/NG"
+    headers = {
+        "Authorization": f"Bearer {FLW_SECRET_KEY}",
+        "Content-Type": "application/json"
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.get(url, headers=headers, timeout=8.0)
+            if res.status_code == 200:
+                return res.json().get("data", [])
+            print(f"Failed fetching FLW banks list upstream: {res.text}")
+            return []
+    except Exception as e:
+        print(f"Exception raised during bank list retrieval: {e}")
+        return []
+
 # --- FLUTTERWAVE CORE UTILS ---
 async def generate_flw_subaccount(bank_code: str, account_number: str, business_name: str, phone: str, vendor_id: int) -> Optional[str]:
-    """Helper module to handle upstream subaccount pipelines cleanly with flat 0-fee commissions"""
+    """Helper module to handle upstream subaccount pipelines with dynamic upstream bank lookup"""
     if not FLW_SECRET_KEY:
         print("Split implementation failed: FLUTTERWAVE_SECRET_KEY missing from environment properties context.")
         return None
@@ -147,14 +170,39 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
         "Content-Type": "application/json"
     }
     
-    # Normalization Map: Converts 6-digit fintech bank routing tokens to Flutterwave Core routing variables
-    FLW_V3_BANK_MAPPING = {
-        "100005": "999992",  # Remap OPay App ID to Flutterwave v3 Engine Code
-        "090405": "50515",   # Remap Moniepoint ID to Flutterwave v3 Engine Code
-        "090267": "50211"    # Remap Kuda ID to Flutterwave v3 Engine Code
-    }
-    
-    resolved_bank_code = FLW_V3_BANK_MAPPING.get(bank_code, bank_code)
+    resolved_bank_code = None
+
+    # 1. DYNAMIC FLUTTERWAVE BANK DISCOVERY
+    try:
+        async with httpx.AsyncClient() as client:
+            banks_res = await client.get("https://api.flutterwave.com/v3/banks/NG", headers=headers, timeout=8.0)
+            if banks_res.status_code == 200:
+                flw_banks = banks_res.json().get("data", [])
+                
+                for bank in flw_banks:
+                    if bank.get("code") == bank_code:
+                        resolved_bank_code = bank.get("code")
+                        break
+                
+                if not resolved_bank_code:
+                    search_terms = {
+                        "100005": ["opay", "paycom"],
+                        "090405": ["moniepoint"],
+                        "090267": ["kuda"]
+                    }
+                    terms = search_terms.get(bank_code, [])
+                    for bank in flw_banks:
+                        bank_name_lower = bank.get("name", "").lower()
+                        if any(term in bank_name_lower for term in terms):
+                            resolved_bank_code = bank.get("code")
+                            print(f"--> Dynamically mapped {bank_code} to Flutterwave code: {resolved_bank_code} ({bank.get('name')})")
+                            break
+    except Exception as fetch_err:
+        print(f"Warning: Failed to perform live bank discovery lookup: {fetch_err}")
+
+    if not resolved_bank_code:
+        resolved_bank_code = bank_code
+
     fallback_email = f"vendor_{vendor_id}@businesshub.internal"
     
     payload = {
@@ -167,6 +215,7 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
         "split_type": "flat",
         "split_value": 0  
     }
+    
     try:
         async with httpx.AsyncClient() as client:
             res = await client.post(url, json=payload, headers=headers, timeout=10.0)
