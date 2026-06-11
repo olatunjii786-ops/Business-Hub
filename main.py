@@ -21,7 +21,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = os.getenv("ADMIN_TELEGRAM_ID")
 APP_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
 FLW_SECRET_HASH = os.getenv("FLW_SECRET_HASH", "BusinessHubSecureHash2026")
-FLW_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY") # Crucial for background subaccount APIs
+FLW_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY") 
 
 if not BOT_TOKEN or not DATABASE_URL:
     raise ValueError("CRITICAL ERROR: Environment variables TELEGRAM_BOT_TOKEN or DATABASE_URL are missing!")
@@ -62,7 +62,7 @@ class Vendor(Base):
     is_approved = Column(Boolean, default=True)
     bank_code = Column(String(50), nullable=True)
     account_number = Column(String(50), nullable=True)
-    subaccount_id = Column(String(100), nullable=True)  # Core mapping update for split architecture
+    subaccount_id = Column(String(100), nullable=True)  
 
 class Product(Base):
     __tablename__ = "products"
@@ -147,18 +147,25 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
         "Content-Type": "application/json"
     }
     
-    # Generate a functional workspace communication alias to satisfy gateway constraints
+    # Normalization Map: Converts 6-digit fintech bank routing tokens to Flutterwave Core routing variables
+    FLW_V3_BANK_MAPPING = {
+        "100005": "999992",  # Remap OPay App ID to Flutterwave v3 Engine Code
+        "090405": "50515",   # Remap Moniepoint ID to Flutterwave v3 Engine Code
+        "090267": "50211"    # Remap Kuda ID to Flutterwave v3 Engine Code
+    }
+    
+    resolved_bank_code = FLW_V3_BANK_MAPPING.get(bank_code, bank_code)
     fallback_email = f"vendor_{vendor_id}@businesshub.internal"
     
     payload = {
-        "account_bank": bank_code,
+        "account_bank": resolved_bank_code,
         "account_number": account_number,
         "business_name": business_name,
         "business_mobile": phone,
         "business_email": fallback_email,
         "country": "NG",
         "split_type": "flat",
-        "split_value": 0  # 0 platform commission means 100% net goes to vendor wallet maps
+        "split_value": 0  
     }
     try:
         async with httpx.AsyncClient() as client:
@@ -256,7 +263,6 @@ async def verify_vendor_session(request: Request, db: Session = Depends(get_db))
     if not vendor:
         return {"registered": False}
     
-    # DYNAMIC MIGRATION LAYER: Automatically registers subaccounts for existing legacy vendors
     if vendor.bank_code and vendor.account_number and not vendor.subaccount_id:
         sub_id = await generate_flw_subaccount(
             bank_code=vendor.bank_code,
@@ -309,15 +315,12 @@ async def register_or_edit_vendor(
         clean_phone = "234" + clean_phone[1:]
 
     vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
-    
-    # Process or modify subaccount configurations dynamically
     target_subaccount_id = vendor.subaccount_id if vendor else None
     
     if bank_code and account_number:
         if len(account_number) != 10 or not account_number.isdigit():
             raise HTTPException(status_code=400, detail="Invalid NUBAN Account Number. Must be exactly 10 digits.")
             
-        # Trigger creation if bank profile is updated or freshly established
         if not vendor or vendor.bank_code != bank_code or vendor.account_number != account_number:
             created_id = await generate_flw_subaccount(bank_code, account_number, business_name, clean_phone, user['id'])
             if not created_id and not target_subaccount_id:
@@ -500,7 +503,6 @@ async def load_storefront_configuration(vendor_id: Optional[int] = None, db: Ses
         "products": [{"id": p.id, "vendor_id": p.vendor_id, "title": p.title, "price": p.price, "quantity": p.quantity, "sizes": p.sizes, "category": p.category, "image_url": p.image_url} for p in products]
     }
 
-# --- REFACTORED COHERENT PIPELINE ROUTE ---
 @app.post("/api/checkout")
 async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
@@ -523,7 +525,6 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     calculated_total = 0.0
     items_summary = []
 
-    # Read-Only Verification (Deferred Stock Adjustment)
     for item in req.items:
         prod = db.query(Product).filter(Product.id == item.product_id).first()
         if not prod or prod.quantity < item.quantity:
@@ -543,7 +544,6 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     db.add(new_order)
     db.commit()
 
-    # Pass subaccount_id directly to front-facing payment payloads
     return {
         "success": True, 
         "order_code": generated_code, 
@@ -552,7 +552,6 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
         "subaccount_id": vendor_profile.subaccount_id if vendor_profile else None
     }
 
-# --- REAL-TIME SECURE GATEWAY WEBHOOK HUB ---
 @app.post("/api/v1/payments/webhook")
 async def flutterwave_payment_webhook(request: Request, db: Session = Depends(get_db)):
     flw_signature = request.headers.get("verif-hash")
@@ -571,7 +570,6 @@ async def flutterwave_payment_webhook(request: Request, db: Session = Depends(ge
             
         if order.status == "pending":
             try:
-                # Atomically Deduct Inventory on Payment Confirmation
                 loaded_items = json.loads(order.items)
                 for item in loaded_items:
                     prod = db.query(Product).filter(Product.id == item["product_id"]).first()
