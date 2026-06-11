@@ -20,6 +20,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = os.getenv("ADMIN_TELEGRAM_ID")
 APP_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+# Using FLW_SECRET_HASH to match your dashboard variable
 FLW_SECRET_HASH = os.getenv("FLW_SECRET_HASH", "BusinessHubSecureHash2026")
 
 if not BOT_TOKEN or not DATABASE_URL:
@@ -141,7 +142,9 @@ async def root_redirect():
 async def serve_shop(request: Request):
     return templates.TemplateResponse(request=request, name="shop.html")
 
+# --- FIXED SECTION: Aliased /webapp/register to fix the vendor 404 ---
 @app.get("/vendor")
+@app.get("/webapp/register")
 async def serve_vendor(request: Request):
     return templates.TemplateResponse(request=request, name="vendor.html")
 
