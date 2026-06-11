@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Business Hub Storefront</title>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <script src="https://checkout.flutterwave.com/v3.js"></script>
     <style>
         :root {
             --accent: var(--tg-theme-button-color, #007aff);
@@ -32,7 +33,6 @@
             overflow-x: hidden;
         }
 
-        /* High-Fidelity Launch Splash Overlay */
         #splash-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg); display: flex; flex-direction: column;
@@ -47,7 +47,6 @@
         }
         @keyframes shimmer { 0% { background-position: 0% center; } 100% { background-position: 200% center; } }
 
-        /* Discovery Search and Filter Mechanics */
         .search-wrapper { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
         .search-input {
             width: 100%; padding: 12px 16px; border-radius: var(--radius-md);
@@ -68,7 +67,6 @@
         }
         .filter-pill.active { background: var(--accent); color: var(--accent-text); }
 
-        /* Vendor Carousel Horizontal Hub */
         .vendor-carousel-header { font-size: 12px; font-weight: 700; color: var(--hint); text-transform: uppercase; padding: 0 12px; margin-top: 8px; }
         .vendor-row {
             display: flex; gap: 12px; overflow-x: auto; padding: 12px;
@@ -85,7 +83,6 @@
         .vendor-circle-card.active .vendor-avatar { border-color: var(--accent); transform: scale(1.05); }
         .vendor-label { font-size: 11px; font-weight: 600; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; width: 100%; }
 
-        /* Dedicated Store Profile Card Banner */
         .store-banner {
             background: var(--card-bg); padding: 24px 16px; border-radius: var(--radius-lg);
             margin: 12px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;
@@ -94,10 +91,7 @@
         .store-name { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
         .store-bio { font-size: 13px; color: var(--hint); line-height: 1.4; max-width: 85%; }
 
-        /* General & Adaptive Product Feed Matrix Grid Layout */
-        .market-grid {
-            display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px;
-        }
+        .market-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; padding: 12px; }
         .prod-card {
             background: var(--card-bg); border-radius: var(--radius-md); overflow: hidden;
             box-shadow: 0 4px 12px rgba(0,0,0,0.01); display: flex; flex-direction: column;
@@ -107,7 +101,6 @@
         .prod-img-box { position: relative; width: 100%; height: 140px; background: var(--bg); }
         .prod-img-box img { width: 100%; height: 100%; object-fit: cover; }
         
-        /* Grayscale Sold Out Core Visual Overlays */
         .prod-card.sold-out .prod-img-box img { filter: grayscale(1) opacity(0.5); }
         .sold-out-badge {
             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%) rotate(-12deg);
@@ -120,7 +113,6 @@
         .prod-price { font-weight: 700; font-size: 16px; color: var(--accent); }
         .prod-owner-tag { font-size: 10px; color: var(--hint); margin-top: auto; font-weight: 500; }
 
-        /* Slide-up Bottom Drawers / Sheets Layout */
         .drawer-backdrop {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.4); z-index: 4000; display: none; opacity: 0;
@@ -136,7 +128,6 @@
         }
         .bottom-drawer.open { transform: translateY(0); }
 
-        /* Sizing Selector Configuration Tiles */
         .size-box-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 18px 0; }
         .size-tile {
             padding: 10px 16px; border: 1px solid var(--bg); background: var(--bg);
@@ -145,7 +136,6 @@
         }
         .size-tile.selected { border-color: var(--accent); background: var(--accent); color: var(--accent-text); }
         
-        /* Math Selector Counters */
         .qty-stepper { display: flex; align-items: center; gap: 16px; margin: 10px 0 20px 0; }
         .step-btn {
             width: 36px; height: 36px; border-radius: 50%; border: none;
@@ -154,7 +144,6 @@
         }
         .qty-val { font-size: 16px; font-weight: 700; width: 24px; text-align: center; }
 
-        /* Floating Dynamic Cart Actions Bar */
         .floating-cart-bar {
             position: fixed; bottom: 16px; left: 16px; right: 16px;
             background: var(--accent); color: var(--accent-text); padding: 16px 20px;
@@ -167,7 +156,6 @@
         .cart-meta { font-size: 12px; opacity: 0.8; margin-top: 2px; }
         .cart-price-sum { font-weight: 800; font-size: 17px; }
 
-        /* Forms Layout & Navigation Management tabs */
         .form-group { margin-bottom: 16px; }
         .form-group label { display: block; font-size: 12px; font-weight: 600; margin-bottom: 6px; color: var(--hint); }
         .form-control {
@@ -194,7 +182,6 @@
     </div>
 
     <div id="marketplace-shell" style="display:none;">
-        
         <div id="discover-header-block" class="search-wrapper">
             <input type="text" id="global-search" class="search-input" placeholder="Search products, shoes, bags..." oninput="filterCatalogGrid()">
             <div class="pill-carousel" id="categories-pill-box">
@@ -268,7 +255,7 @@
                 <label>Complete Dropoff Delivery Address</label>
                 <textarea id="order-address" placeholder="State, City, Street details perfectly mapped..." rows="3" class="form-control" required></textarea>
             </div>
-            <button type="submit" class="action-submit-btn">Complete Checkout & Open WhatsApp</button>
+            <button type="submit" id="checkout-form-submit-btn" class="action-submit-btn">Proceed to Secure Payment</button>
         </form>
     </div>
 
@@ -294,7 +281,6 @@
         let selectedSizeString = "";
         let runningQtyInt = 1;
 
-        // Boot and routing analysis engine hook
         async function bootStorefront() {
             const startupParamVendorId = (tg.initDataUnsafe && tg.initDataUnsafe.start_param) ? tg.initDataUnsafe.start_param : null;
             let apiUrl = "/api/marketplace/configs";
@@ -366,7 +352,6 @@
         function toggleVendorFilter(vendorId, element) {
             tg.HapticFeedback.impactOccurred('light');
             const isAlreadyFiltered = activeVendorFilterId === vendorId;
-            
             document.querySelectorAll(".vendor-circle-card").forEach(c => c.classList.remove("active"));
             
             if (isAlreadyFiltered) {
@@ -528,8 +513,15 @@
             document.getElementById("checkout-drawer").classList.add("open");
         }
 
+        // --- PRODUCTION SECURED CHECKOUT PIPELINE MECHANISM ---
         async function submitCheckoutOrder(e) {
             e.preventDefault();
+            
+            const submitBtn = document.getElementById("checkout-form-submit-btn");
+            if (submitBtn.disabled) return;
+            submitBtn.disabled = true;
+            submitBtn.innerText = "Initializing payment entry...";
+            
             tg.HapticFeedback.impactOccurred('medium');
 
             const orderPayload = {
@@ -550,30 +542,68 @@
                 });
 
                 const data = await res.json();
-                if (data.success) {
-                    localCartArray = [];
-                    updateCartNavigationUI();
-                    closeProductDrawer();
-                    loadCustomerOrderHistory();
-                    
-                    tg.HapticFeedback.notificationOccurred('success');
-
-                    const firstItem = orderPayload.items[0];
-                    const rawText = `Hello, I just placed an order via Business Hub! 🛍️\n\n*Order Code:* ${data.order_code}\n*Item:* ${firstItem.quantity}x ${firstItem.title} (Size: ${firstItem.size})\n*Total Value:* ₦${data.total_amount.toLocaleString()}\n\nPlease provide payment confirmation details.`;
-                    const compiledWhatsappUrl = `https://wa.me/${data.vendor_phone}?text=${encodeURIComponent(rawText)}`;
-                    
-                    tg.showPopup({
-                        title: "Order Placed Successfully!",
-                        message: "Your order has been registered in our database. Tap continue to open WhatsApp and send your receipt details straight to the vendor.",
-                        buttons: [{ type: "default", text: "Open WhatsApp Chat" }]
-                    }, () => {
-                        tg.openLink(compiledWhatsappUrl);
-                    });
-                } else {
-                    tg.showAlert(`Checkout failed: ${data.detail || "Insufficient stock or server discrepancy"}`);
+                if (!data.success) {
+                    tg.showAlert(`Checkout failed: ${data.detail || "Insufficient stock error"}`);
+                    submitBtn.disabled = false;
+                    submitBtn.innerText = "Proceed to Secure Payment";
+                    return;
                 }
+
+                FlutterwaveCheckout({
+                    public_key: "FLWPUBK-f6abdffecd8a10ee6651a7c18ffb8294-X", 
+                    tx_ref: data.order_code,
+                    amount: data.total_amount,
+                    currency: "NGN",
+                    payment_options: "card, banktransfer, ussd",
+                    customer: {
+                        email: "buyer@businesshub.ng", 
+                        phone_number: orderPayload.customer_phone,
+                        name: orderPayload.customer_name,
+                    },
+                    customizations: {
+                        title: "Business Hub Marketplace",
+                        description: `Payment for Order Ref: ${data.order_code}`,
+                    },
+                    callback: function (paymentResponse) {
+                        if (paymentResponse.status === "successful" || paymentResponse.charge_response_code === "00") {
+                            localCartArray = [];
+                            updateCartNavigationUI();
+                            closeProductDrawer();
+                            loadCustomerOrderHistory();
+                            
+                            tg.HapticFeedback.notificationOccurred('success');
+
+                            const firstItem = orderPayload.items[0];
+                            const rawText = `Hello, I just paid for an order via Business Hub! 💳🛍\n\n*Order Code:* ${data.order_code}\n*Item:* ${firstItem.quantity}x ${firstItem.title} (Size: ${firstItem.size})\n*Total Value:* ₦${data.total_amount.toLocaleString()}\n\nPayment has been secured successfully via Flutterwave channels.`;
+                            
+                            let formattedPhone = data.vendor_phone.replace(/\D/g, '');
+                            if (formattedPhone.startsWith('0')) {
+                                formattedPhone = '234' + formattedPhone.substring(1);
+                            }
+
+                            const compiledWhatsappUrl = `https://wa.me/${formattedPhone}?text=${encodeURIComponent(rawText)}`;
+                            
+                            tg.showPopup({
+                                title: "Payment Secured & Verified!",
+                                message: "Your transaction has cleared successfully. Tap below to notify the vendor on WhatsApp.",
+                                buttons: [{ type: "default", text: "Open WhatsApp Chat" }]
+                            }, () => {
+                                tg.openLink(compiledWhatsappUrl);
+                            });
+                        } else {
+                            tg.showAlert("Payment collection confirmation timed out. Please review transaction status details.");
+                        }
+                    },
+                    onclose: function() {
+                        submitBtn.disabled = false;
+                        submitBtn.innerText = "Proceed to Secure Payment";
+                    }
+                });
+
             } catch (err) {
-                tg.showAlert("Network pipeline error encountered during order processing.");
+                tg.showAlert("Network pipeline error encountered during checkout synchronization.");
+                submitBtn.disabled = false;
+                submitBtn.innerText = "Proceed to Secure Payment";
             }
         }
 
@@ -598,7 +628,7 @@
                     card.innerHTML = `
                         <div style="display:flex; flex-direction:column; gap:2px;">
                             <span style="font-weight:700; font-size:13px;">${o.order_code.substring(0,18)}...</span>
-                            <span style="font-size:14px; font-weight:700; color:var(--accent);">₦${o.total_amount.toLocaleString()}</span>
+                            <span style="font-weight:700; color:var(--accent); font-size:14px;">₦${o.total_amount.toLocaleString()}</span>
                         </div>
                         <div style="display:flex; align-items:center; gap:10px;">
                             <span class="history-status-badge" style="background:${statusColor}; color:${textColor};">${o.status}</span>

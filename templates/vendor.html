@@ -32,7 +32,6 @@
             overflow-x: hidden;
         }
 
-        /* Splash Screen Overlay */
         #splash-screen {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: var(--bg); display: flex; flex-direction: column;
@@ -47,22 +46,20 @@
         }
         @keyframes shimmer { 0% { background-position: 0% center; } 100% { background-position: 200% center; } }
 
-        /* Navigation Management Tabs */
         .tab-bar {
             display: flex; background: var(--card-bg); padding: 4px;
             border-radius: var(--radius-md); margin: 16px; gap: 4px;
         }
-        .tab-btn {
+        .tab-bar button {
             flex: 1; padding: 12px; border: none; background: transparent;
             color: var(--hint); font-weight: 700; font-size: 13px;
             border-radius: 12px; cursor: pointer; transition: var(--transition-fluid);
         }
-        .tab-btn.active { background: var(--bg); color: var(--text); }
+        .tab-bar button.active { background: var(--bg); color: var(--text); }
 
         .view-panel { display: none; padding: 0 16px; }
         .view-panel.active { display: block; }
 
-        /* Forms Layout & Inputs */
         .form-card {
             background: var(--card-bg); padding: 20px; border-radius: var(--radius-lg);
             margin-bottom: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.01);
@@ -81,9 +78,8 @@
             color: var(--accent-text); border-radius: var(--radius-md); font-weight: 700;
             font-size: 15px; cursor: pointer; transition: var(--transition-fluid);
         }
-        .action-submit-btn:active { transform: scale(0.98); }
+        .action-submit-btn:disabled { background: var(--hint); opacity: 0.6; cursor: not-allowed; }
 
-        /* Product Inventory Feed Cards */
         .item-list-row { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
         .inventory-card {
             background: var(--card-bg); padding: 12px; border-radius: var(--radius-md);
@@ -100,7 +96,6 @@
         .btn-edit { background: var(--bg); color: var(--text); }
         .btn-delete { background: rgba(255,59,48,0.1); color: #ff3b30; }
 
-        /* Orders Feed Cards */
         .order-card {
             background: var(--card-bg); padding: 16px; border-radius: var(--radius-lg);
             margin-bottom: 12px; display: flex; flex-direction: column; gap: 10px;
@@ -111,6 +106,21 @@
         
         .customer-memo-block { font-size: 13px; line-height: 1.4; background: var(--bg); padding: 10px; border-radius: var(--radius-md); }
         .order-select-status { padding: 8px; border-radius: 8px; background: var(--bg); color: var(--text); border: none; font-size: 12px; font-weight: 600; width: 100%; }
+
+        .modal-backdrop {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+            display: flex; justify-content: center; align-items: center; z-index: 999;
+            opacity: 0; pointer-events: none; transition: var(--transition-fluid);
+        }
+        .modal-backdrop.active { opacity: 1; pointer-events: auto; }
+        .modal-window {
+            background: var(--card-bg); width: 90%; max-width: 400px; padding: 24px;
+            border-radius: var(--radius-lg); box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+            transform: translateY(20px); transition: var(--transition-fluid);
+        }
+        .modal-backdrop.active .modal-window { transform: translateY(0); }
+        .section-divider { border: none; border-top: 1px dashed var(--bg); margin: 16px 0; }
     </style>
 </head>
 <body>
@@ -122,7 +132,7 @@
     <div id="registration-terminal" class="view-panel" style="padding:24px 16px;">
         <div class="form-card">
             <h2 class="form-title">Create Vendor Account</h2>
-            <form id="setup-vendor-form" onsubmit="submitVendorProfile(event)">
+            <form id="setup-vendor-form" onsubmit="submitVendorProfile(event, false)">
                 <div class="form-group">
                     <label>Boutique Business Name</label>
                     <input type="text" id="reg-name" class="form-control" placeholder="e.g. Inies Bags & Clothing" required>
@@ -139,7 +149,29 @@
                     <label>Store Brand Logo Image File</label>
                     <input type="file" id="reg-logo" class="form-control" accept="image/*">
                 </div>
-                <button type="submit" class="action-submit-btn">Initialize Vendor Workspace</button>
+
+                <div class="section-divider"></div>
+                <h3 style="font-size: 14px; font-weight: 800; color: var(--accent); margin-bottom: 12px; text-transform: uppercase;">🏦 Bank Settlement Account</h3>
+
+                <div class="form-group">
+                    <label>Settlement Bank Name</label>
+                    <select id="reg-bank-code" class="form-control" required>
+                        <option value="120001">OPay Digital Services</option>
+                        <option value="100033">PalmPay</option>
+                        <option value="058">GTBank</option>
+                        <option value="011">First Bank</option>
+                        <option value="057">Zenith Bank</option>
+                        <option value="035">Wema Bank</option>
+                        <option value="044">Access Bank</option>
+                        <option value="033">United Bank for Africa (UBA)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>10-Digit NUBAN Account Number</label>
+                    <input type="text" id="reg-account-no" maxlength="10" class="form-control" placeholder="0123456789" required style="letter-spacing: 2px; font-size: 16px; text-align: center;">
+                </div>
+
+                <button type="submit" class="action-submit-btn" id="btn-reg-submit">Initialize Vendor Workspace</button>
             </form>
         </div>
     </div>
@@ -175,7 +207,7 @@
                         <input type="text" id="prod-category" class="form-control" placeholder="e.g. Shoes, Clothes, Bags" required>
                     </div>
                     <div class="form-group">
-                        <label>Available Sizing Variants (Comma separated strings)</label>
+                        <label>Available Sizing Variants (Comma separated)</label>
                         <input type="text" id="prod-sizes" class="form-control" placeholder="e.g. 40, 41, 42, XL, L">
                     </div>
                     <div class="form-group">
@@ -207,7 +239,7 @@
 
             <div class="form-card">
                 <h3 class="form-title">Modify Store Branding</h3>
-                <form id="edit-vendor-form" onsubmit="submitVendorProfile(event)">
+                <form id="edit-vendor-form" onsubmit="submitVendorProfile(event, true)">
                     <div class="form-group">
                         <label>Boutique Business Name</label>
                         <input type="text" id="edit-name" class="form-control" required>
@@ -224,9 +256,44 @@
                         <label>Update Logo File</label>
                         <input type="file" id="edit-logo" class="form-control" accept="image/*">
                     </div>
-                    <button type="submit" class="action-submit-btn">Apply Brand Updates</button>
+
+                    <div class="section-divider"></div>
+                    <h3 style="font-size: 13px; font-weight: 800; color: var(--hint); margin-bottom: 12px; text-transform: uppercase;">🔒 Bank Settlement (Locked)</h3>
+                    <p style="font-size: 12px; color: var(--hint); margin-bottom: 12px; line-height: 1.4;">Settlement details are linked to your secure Flutterwave subaccount setup. Contact support to update routing information.</p>
+
+                    <button type="submit" class="action-submit-btn" id="btn-edit-submit">Apply Brand Updates</button>
                 </form>
             </div>
+        </div>
+    </div>
+
+    <div id="payout-upgrade-modal" class="modal-backdrop">
+        <div class="modal-window">
+            <div style="text-align: center; margin-bottom: 16px;">
+                <span style="font-size: 36px;">🏦</span>
+                <h3 style="font-size: 18px; font-weight: 800; margin-top: 8px;">Activate Automated Payouts</h3>
+                <p style="font-size: 12px; color: var(--hint); margin-top: 4px; line-height: 1.4;">We've enabled secure Card & Bank Transfer automation. Please supply your payout routing properties to open up the core store desk tools.</p>
+            </div>
+            <form onsubmit="handlePayoutUpgrade(event)">
+                <div class="form-group">
+                    <label>Settlement Bank Name</label>
+                    <select id="upgrade-bank-code" class="form-control" required>
+                        <option value="120001">OPay Digital Services</option>
+                        <option value="100033">PalmPay</option>
+                        <option value="058">GTBank</option>
+                        <option value="011">First Bank</option>
+                        <option value="057">Zenith Bank</option>
+                        <option value="035">Wema Bank</option>
+                        <option value="044">Access Bank</option>
+                        <option value="033">United Bank for Africa (UBA)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>10-Digit Account Number</label>
+                    <input type="text" id="upgrade-account-no" maxlength="10" class="form-control" placeholder="0123456789" required style="letter-spacing: 2px; font-size: 16px; text-align: center;">
+                </div>
+                <button type="submit" id="btn-upgrade-submit" class="action-submit-btn">Verify & Complete Settlement Update</button>
+            </form>
         </div>
     </div>
 
@@ -236,8 +303,8 @@
 
         let vendorMetaObj = null;
         let globalShareLinkString = "";
+        let merchantCatalogCache = {}; // Global Cache Object Map
 
-        // Core initialization sync engine hook
         async function initConsole() {
             try {
                 const res = await fetch("/api/vendor/me", {
@@ -245,7 +312,6 @@
                 });
                 const data = await res.json();
 
-                // Clear fallback loading screen animations instantly
                 document.getElementById("splash-screen").style.opacity = "0";
                 setTimeout(() => document.getElementById("splash-screen").style.display = "none", 350);
 
@@ -256,13 +322,16 @@
                     document.getElementById("registration-terminal").style.display = "none";
                     document.getElementById("console-terminal").style.display = "block";
                     
-                    // Map settings modifications values
                     document.getElementById("edit-name").value = data.business_name;
                     document.getElementById("edit-phone").value = data.phone_number;
                     document.getElementById("edit-bio").value = data.bio || "";
                     document.getElementById("prof-preview-name").innerText = data.business_name;
                     document.getElementById("prof-preview-logo").src = data.logo_url || "";
                     document.getElementById("prof-preview-link").innerText = `🔗 Copy Shop Deep-Link`;
+
+                    if (!data.has_payout_setup) {
+                        document.getElementById("payout-upgrade-modal").classList.add("active");
+                    }
 
                     loadVendorCatalogListings();
                     loadIncomingVendorOrders();
@@ -280,7 +349,7 @@
         function switchTab(tabId, btn) {
             tg.HapticFeedback.impactOccurred('light');
             document.querySelectorAll(".view-panel").forEach(p => p.classList.remove("active"));
-            document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+            document.querySelectorAll(".tab-bar button").forEach(b => b.classList.remove("active"));
             
             document.getElementById(tabId).classList.add("active");
             btn.classList.add("active");
@@ -288,20 +357,28 @@
 
         function copyBoutiqueShareLink() {
             navigator.clipboard.writeText(globalShareLinkString);
-            tg.showAlert("Boutique customer deep-link copied straight to clipboard! Share it on Telegram so buyers can launch directly into your store.");
+            tg.showAlert("Boutique customer deep-link copied straight to clipboard!");
         }
 
-        async function submitVendorProfile(e) {
+        async function submitVendorProfile(e, isEdit) {
             e.preventDefault();
             tg.HapticFeedback.impactOccurred('medium');
             
-            const isEdit = vendorMetaObj !== null;
             const prefix = isEdit ? "edit-" : "reg-";
+            const btnSubmit = document.getElementById(`btn-${isEdit ? 'edit' : 'reg'}-submit`);
+            
+            btnSubmit.disabled = true;
+            btnSubmit.innerText = "Processing Details...";
             
             const formData = new FormData();
             formData.append("business_name", document.getElementById(`${prefix}name`).value);
             formData.append("phone_number", document.getElementById(`${prefix}phone`).value);
             formData.append("bio", document.getElementById(`${prefix}bio`).value);
+            
+            if (!isEdit) {
+                formData.append("bank_code", document.getElementById("reg-bank-code").value);
+                formData.append("account_number", document.getElementById("reg-account-no").value);
+            }
             
             const fileInput = document.getElementById(`${prefix}logo`);
             if (fileInput.files.length > 0) {
@@ -315,14 +392,60 @@
                     body: formData
                 });
                 
+                const responseData = await res.json();
+                
                 if (res.ok) {
                     tg.showAlert(isEdit ? "Branding metrics applied successfully!" : "Account created successfully!");
                     window.location.reload();
                 } else {
-                    tg.showAlert("Pipeline sync mismatch error encountered during processing.");
+                    btnSubmit.disabled = false;
+                    btnSubmit.innerText = isEdit ? "Apply Brand Updates" : "Initialize Vendor Workspace";
+                    tg.showAlert(responseData.detail || "Error encountered during processing.");
                 }
             } catch (err) {
+                btnSubmit.disabled = false;
+                btnSubmit.innerText = isEdit ? "Apply Brand Updates" : "Initialize Vendor Workspace";
                 tg.showAlert("Server network registration request error occurred.");
+            }
+        }
+
+        async function handlePayoutUpgrade(e) {
+            e.preventDefault();
+            tg.HapticFeedback.impactOccurred('medium');
+            
+            const btn = document.getElementById("btn-upgrade-submit");
+            btn.disabled = true;
+            btn.innerText = "Validating Bank Account...";
+
+            const payload = {
+                bank_code: document.getElementById("upgrade-bank-code").value,
+                account_number: document.getElementById("upgrade-account-no").value
+            };
+
+            try {
+                const res = await fetch("/api/vendor/upgrade-payout", {
+                    method: "POST",
+                    headers: { 
+                        "X-Telegram-Init-Data": tg.initData,
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+                
+                const data = await res.json();
+                if (res.ok) {
+                    tg.showAlert("Payout account validation successful!");
+                    document.getElementById("payout-upgrade-modal").classList.remove("active");
+                    window.location.reload();
+                } else {
+                    btn.disabled = false;
+                    btn.innerText = "Verify & Complete Settlement Update";
+                    tg.showAlert(data.detail || "Bank routing check failure.");
+                }
+            } catch (err) {
+                btn.disabled = false;
+                btn.innerText = "Verify & Complete Settlement Update";
+                tg.showAlert("Network verification pipe channel drop failure.");
             }
         }
 
@@ -372,9 +495,13 @@
                 });
                 const products = await res.json();
                 const container = document.getElementById("inventory-feed-container");
-                container.innerHTML = products.length === 0 ? `<p style="text-align:center; padding:20px; font-size:13px; color:var(--hint);">No products inside your store catalog yet.</p>` : "";
+                container.innerHTML = products.length === 0 ? `<p style="text-align:center; padding:20px; font-size:13px; color:var(--hint);">No products inside store catalog yet.</p>` : "";
+
+                merchantCatalogCache = {}; // Clear previous memory map
 
                 products.forEach(p => {
+                    merchantCatalogCache[p.id] = p; // Inject entity into secure object cache
+                    
                     const card = document.createElement("div");
                     card.className = "inventory-card";
                     card.innerHTML = `
@@ -384,7 +511,7 @@
                             <span class="inventory-meta">Qty: <b>${p.quantity}</b> | Cat: ${p.category}</span>
                             <span class="inventory-price">₦${p.price.toLocaleString()}</span>
                             <div class="btn-group-sm">
-                                <button class="btn-sm btn-edit" onclick="triggerProductEditState(${JSON.stringify(p).replace(/"/g, '&quot;')})">Modify</button>
+                                <button class="btn-sm btn-edit" onclick="triggerProductEditState(${p.id})">Modify</button>
                                 <button class="btn-sm btn-delete" onclick="deleteProductEntry(${p.id})">Delete</button>
                             </div>
                         </div>
@@ -394,8 +521,11 @@
             } catch (err) { console.error("Catalog retrieval sync break:", err); }
         }
 
-        function triggerProductEditState(p) {
+        function triggerProductEditState(id) {
             tg.HapticFeedback.impactOccurred('light');
+            const p = merchantCatalogCache[id];
+            if (!p) return;
+
             document.getElementById("product-form-title").innerText = "Modify Product Entry";
             document.getElementById("form-product-id").value = p.id;
             document.getElementById("prod-title").value = p.title;
@@ -416,7 +546,7 @@
         }
 
         async function deleteProductEntry(id) {
-            tg.showConfirm("Are you completely sure you want to delete this product listing from your live client catalog storefront?", async (yes) => {
+            tg.showConfirm("Are you sure you want to delete this product listing?", async (yes) => {
                 if (yes) {
                     const res = await fetch(`/api/products/${id}`, {
                         method: "DELETE",
