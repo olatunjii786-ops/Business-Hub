@@ -3,7 +3,7 @@ import json
 import hmac
 import hashlib
 import httpx
-import base64  # 👈 Added for permanent database image storage
+import base64
 from datetime import datetime, timezone
 from typing import List, Optional
 from urllib.parse import parse_qsl
@@ -20,6 +20,7 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = os.getenv("ADMIN_TELEGRAM_ID")
 APP_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
+FLW_SECRET_HASH = os.getenv("FLW_SECRET_HASH", "BusinessHubSecureHash2026")
 
 if not BOT_TOKEN or not DATABASE_URL:
     raise ValueError("CRITICAL ERROR: Environment variables TELEGRAM_BOT_TOKEN or DATABASE_URL are missing!")
@@ -28,8 +29,6 @@ BOT_USERNAME = "isaacbusinessbot"
 
 app = FastAPI(title="Business Hub Central Engine")
 templates = Jinja2Templates(directory="templates")
-
-# Note: Local file storage configurations have been removed to avoid Render Free Tier container reset wipes.
 
 app.add_middleware(
     CORSMiddleware,
@@ -58,8 +57,10 @@ class Vendor(Base):
     business_name = Column(String(255), nullable=False)
     bio = Column(Text, nullable=True)
     phone_number = Column(String(20), nullable=False)
-    logo_url = Column(Text, nullable=True)  # Holds Base64 Data String
+    logo_url = Column(Text, nullable=True)
     is_approved = Column(Boolean, default=True)
+    bank_code = Column(String(50), nullable=True)
+    account_number = Column(String(50), nullable=True)
 
 class Product(Base):
     __tablename__ = "products"
@@ -70,7 +71,7 @@ class Product(Base):
     quantity = Column(Integer, default=1)
     sizes = Column(String(255), nullable=True)
     category = Column(String(100), default="General")
-    image_url = Column(Text, nullable=True)  # Holds Base64 Data String
+    image_url = Column(Text, nullable=True)
 
 class Order(Base):
     __tablename__ = "orders"
@@ -86,6 +87,25 @@ class Order(Base):
     status = Column(String(50), default="pending")
 
 Base.metadata.create_all(bind=engine)
+
+# --- PYNANTIC SCHEMAS ---
+class CheckoutItem(BaseModel):
+    product_id: int
+    quantity: int
+    size: str
+
+class CheckoutRequest(BaseModel):
+    customer_name: str
+    customer_phone: str
+    delivery_address: str
+    items: List[CheckoutItem]
+
+class PayoutUpgradePayload(BaseModel):
+    bank_code: str
+    account_number: str
+
+class StatusPayload(BaseModel):
+    status: str
 
 # --- TELEGRAM BOT UTILS ---
 async def send_telegram_alert(chat_id: int, message: str):
@@ -112,10 +132,6 @@ def validate_telegram_auth(init_data: str) -> Optional[dict]:
     except Exception:
         return None
 
-@app.get("/api/health")
-async def health_check():
-    return {"status": "healthy"}
-    
 # --- ROUTE TEMPLATE ENDPOINTS ---
 @app.get("/")
 async def root_redirect():
@@ -195,8 +211,11 @@ async def verify_vendor_session(request: Request, db: Session = Depends(get_db))
     if not vendor:
         return {"registered": False}
     
+    has_payout = bool(vendor.bank_code and vendor.account_number)
+    
     return {
         "registered": True,
+        "has_payout_setup": has_payout,
         "business_name": vendor.business_name,
         "bio": vendor.bio,
         "phone_number": vendor.phone_number,
@@ -210,6 +229,8 @@ async def register_or_edit_vendor(
     business_name: str = Form(...),
     bio: str = Form(""),
     phone_number: str = Form(...),
+    bank_code: Optional[str] = Form(None),
+    account_number: Optional[str] = Form(None),
     logo: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
@@ -236,16 +257,48 @@ async def register_or_edit_vendor(
         if logo_data_url:
             vendor.logo_url = logo_data_url
     else:
+        if not bank_code or not account_number:
+            raise HTTPException(status_code=400, detail="Bank settlement properties required for registration.")
+            
+        if len(account_number) != 10 or not account_number.isdigit():
+            raise HTTPException(status_code=400, detail="Invalid NUBAN Account Number. Must be exactly 10 digits.")
+
         vendor = Vendor(
             vendor_id=user['id'], 
             business_name=business_name, 
             bio=bio, 
             phone_number=clean_phone, 
-            logo_url=logo_data_url
+            logo_url=logo_data_url,
+            bank_code=bank_code,
+            account_number=account_number
         )
         db.add(vendor)
         
     db.commit()
+    return {"success": True}
+
+@app.post("/api/vendor/upgrade-payout")
+async def upgrade_legacy_vendor_payout(
+    payload: PayoutUpgradePayload,
+    request: Request,
+    db: Session = Depends(get_db)
+):
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user:
+        raise HTTPException(status_code=403, detail="Validation trace rejected.")
+        
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor account missing.")
+        
+    if len(payload.account_number) != 10 or not payload.account_number.isdigit():
+        raise HTTPException(status_code=400, detail="Invalid account formatting sequence.")
+        
+    vendor.bank_code = payload.bank_code
+    vendor.account_number = payload.account_number
+    db.commit()
+    
     return {"success": True}
 
 @app.post("/api/products")
@@ -365,17 +418,7 @@ async def load_storefront_configuration(vendor_id: Optional[int] = None, db: Ses
         "products": [{"id": p.id, "vendor_id": p.vendor_id, "title": p.title, "price": p.price, "quantity": p.quantity, "sizes": p.sizes, "category": p.category, "image_url": p.image_url} for p in products]
     }
 
-class CheckoutItem(BaseModel):
-    product_id: int
-    quantity: int
-    size: str
-
-class CheckoutRequest(BaseModel):
-    customer_name: str
-    customer_phone: str
-    delivery_address: str
-    items: List[CheckoutItem]
-
+# --- REFACTORED COHERENT PIPELINE ROUTE ---
 @app.post("/api/checkout")
 async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
@@ -393,17 +436,17 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     
     target_vendor_id = sample.vendor_id
     vendor_profile = db.query(Vendor).filter(Vendor.vendor_id == target_vendor_id).first()
-    vendor_phone = vendor_profile.phone_number if vendor_profile else "234000000000"
+    vendor_phone = vendor_profile.phone_number if vendor_profile else "2348000000000"
 
     calculated_total = 0.0
     items_summary = []
 
+    # Read-Only Verification (Deferred Stock Adjustment)
     for item in req.items:
         prod = db.query(Product).filter(Product.id == item.product_id).first()
         if not prod or prod.quantity < item.quantity:
             raise HTTPException(status_code=400, detail=f"Stock limit exceeded for {prod.title if prod else 'Item'}")
         
-        prod.quantity -= item.quantity
         calculated_total += (prod.price * item.quantity)
         items_summary.append({"product_id": prod.id, "title": prod.title, "price": prod.price, "quantity": item.quantity, "size": item.size})
 
@@ -418,16 +461,55 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     db.add(new_order)
     db.commit()
 
-    alert_message = (
-        f"🚨 *NEW ORDER RECEIVED!*\n\n"
-        f"🛍 *Order Code:* `{generated_code}`\n"
-        f"💰 *Total Value:* ₦{calculated_total:,.2f}\n"
-        f"👤 *Customer:* {req.customer_name}\n\n"
-        f"👉 Open your Vendor App workspace to review full delivery parameters instantly!"
-    )
-    await send_telegram_alert(target_vendor_id, alert_message)
-
     return {"success": True, "order_code": generated_code, "total_amount": calculated_total, "vendor_phone": vendor_phone}
+
+# --- REAL-TIME SECURE GATEWAY WEBHOOK HUB ---
+@app.post("/api/v1/payments/webhook")
+async def flutterwave_payment_webhook(request: Request, db: Session = Depends(get_db)):
+    flw_signature = request.headers.get("verif-hash")
+    if not flw_signature or flw_signature != FLW_SECRET_HASH:
+        raise HTTPException(status_code=401, detail="Webhook signature check verification trace failed.")
+
+    payload = await request.json()
+    
+    if payload.get("status") == "successful" or payload.get("data", {}).get("status") == "successful":
+        tx_data = payload.get("data", {})
+        target_order_code = tx_data.get("tx_ref")
+        
+        order = db.query(Order).filter(Order.order_code == target_order_code).first()
+        if not order:
+            return {"status": "ignored", "reason": "Order missing."}
+            
+        if order.status == "pending":
+            try:
+                # Atomically Deduct Inventory on Payment Confirmation
+                loaded_items = json.loads(order.items)
+                for item in loaded_items:
+                    prod = db.query(Product).filter(Product.id == item["product_id"]).first()
+                    if prod:
+                        prod.quantity = max(0, prod.quantity - item["quantity"])
+                
+                order.status = "confirmed"
+                db.commit()
+                
+                alert_message = (
+                    f"💳 *PAYMENT SECURED & VERIFIED!*\n\n"
+                    f"🛍 *Order Code:* `{order.order_code}`\n"
+                    f"💰 *Total Value:* ₦{order.total_amount:,.2f}\n"
+                    f"👤 *Customer:* {order.customer_name}\n\n"
+                    f"Verification successfully completed via Flutterwave engine layers."
+                )
+                await send_telegram_alert(order.vendor_id, alert_message)
+                
+                buyer_alert = f"✅ *YOUR PAYMENT WAS CONFIRMED!*\n\nCode: `{order.order_code}`\nStatus: *CONFIRMED*"
+                await send_telegram_alert(order.customer_id, buyer_alert)
+                
+            except Exception as e:
+                db.rollback()
+                print(f"Error inside processing pipeline context: {e}")
+                raise HTTPException(status_code=500, detail="Internal transactional sync error.")
+                
+    return {"status": "processed"}
 
 @app.get("/api/customer/orders")
 async def view_customer_orders(request: Request, db: Session = Depends(get_db)):
@@ -453,15 +535,6 @@ async def user_cancel_pending_order(order_id: int, request: Request, db: Session
     if order.status != "pending":
         raise HTTPException(status_code=400, detail="Cannot cancel confirmed order")
         
-    try:
-        loaded_items = json.loads(order.items)
-        for item in loaded_items:
-            prod = db.query(Product).filter(Product.id == item["product_id"]).first()
-            if prod:
-                prod.quantity += item["quantity"]
-    except Exception:
-        pass
-        
     order.status = "cancelled"
     db.commit()
     
@@ -480,7 +553,7 @@ async def view_incoming_vendor_orders(request: Request, db: Session = Depends(ge
     return [{"id": o.id, "order_code": o.order_code, "customer_name": o.customer_name, "customer_phone": o.customer_phone, "delivery_address": o.delivery_address, "total_amount": o.total_amount, "status": o.status, "items": json.loads(o.items)} for o in orders]
 
 @app.post("/api/orders/{order_id}/status")
-async def adjust_order_lifecycle(order_id: int, status_payload: dict, request: Request, db: Session = Depends(get_db)):
+async def adjust_order_lifecycle(order_id: int, status_payload: StatusPayload, request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
@@ -490,7 +563,7 @@ async def adjust_order_lifecycle(order_id: int, status_payload: dict, request: R
     if not order:
          raise HTTPException(404, "Order not found")
 
-    next_status = status_payload.get("status", "pending")
+    next_status = status_payload.status
     order.status = next_status
     db.commit()
     
