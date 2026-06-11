@@ -156,14 +156,7 @@
                 <div class="form-group">
                     <label>Settlement Bank Name</label>
                     <select id="reg-bank-code" class="form-control" required>
-                        <option value="120001">OPay Digital Services</option>
-                        <option value="100033">PalmPay</option>
-                        <option value="058">GTBank</option>
-                        <option value="011">First Bank</option>
-                        <option value="057">Zenith Bank</option>
-                        <option value="035">Wema Bank</option>
-                        <option value="044">Access Bank</option>
-                        <option value="033">United Bank for Africa (UBA)</option>
+                        <option value="">-- Select Bank --</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -278,14 +271,7 @@
                 <div class="form-group">
                     <label>Settlement Bank Name</label>
                     <select id="upgrade-bank-code" class="form-control" required>
-                        <option value="120001">OPay Digital Services</option>
-                        <option value="100033">PalmPay</option>
-                        <option value="058">GTBank</option>
-                        <option value="011">First Bank</option>
-                        <option value="057">Zenith Bank</option>
-                        <option value="035">Wema Bank</option>
-                        <option value="044">Access Bank</option>
-                        <option value="033">United Bank for Africa (UBA)</option>
+                        <option value="">-- Select Bank --</option>
                     </select>
                 </div>
                 <div class="form-group">
@@ -303,7 +289,79 @@
 
         let vendorMetaObj = null;
         let globalShareLinkString = "";
-        let merchantCatalogCache = {}; // Global Cache Object Map
+        let merchantCatalogCache = {};
+
+        // Comprehensive Flutterwave Verified Nigerian Banks Catalog
+        const NIGERIAN_BANKS_DATASET = [
+            { code: "100005", name: "OPay Digital Services" },
+            { code: "090405", name: "Moniepoint Microfinance Bank" },
+            { code: "011", name: "First Bank PLC" },
+            { code: "058", name: "Guaranty Trust Bank (GTB)" },
+            { code: "057", name: "Zenith Bank PLC" },
+            { code: "033", name: "United Bank for Africa (UBA)" },
+            { code: "035", name: "Wema Bank PLC" },
+            { code: "044", name: "Access Bank" },
+            { code: "090267", name: "Kuda Bank" },
+            { code: "090110", name: "VFD Micro Finance Bank" },
+            { code: "050", name: "EcoBank PLC" },
+            { code: "070", name: "Fidelity Bank" },
+            { code: "032", name: "Union Bank PLC" },
+            { code: "183", name: "Keystone Bank" },
+            { code: "076", name: "Polaris Bank" },
+            { code: "010025", name: "KongaPay" },
+            { code: "090325", name: "Sparkle" },
+            { code: "090281", name: "Mint-Finex MICROFINANCE BANK" },
+            { code: "090328", name: "Eyowo MFB" },
+            { code: "090426", name: "Tangerine Bank" },
+            { code: "000025", name: "Titan Trust Bank" },
+            { code: "000026", name: "Taj Bank Limited" },
+            { code: "000027", name: "Globus Bank" },
+            { code: "000029", name: "Lotus Bank" },
+            { code: "000030", name: "Parallex Bank" },
+            { code: "000031", name: "PremiumTrust Bank" },
+            { code: "000034", name: "SIGNATURE BANK" },
+            { code: "000036", name: "Optimus Bank" },
+            { code: "000037", name: "ALTERNATIVE BANK LIMITED" },
+            { code: "060001", name: "Coronation Merchant Bank" },
+            { code: "060002", name: "FBNQUEST Merchant Bank" },
+            { code: "060003", name: "Nova Merchant Bank" },
+            { code: "060004", name: "Greenwich Merchant Bank" },
+            { code: "068", name: "Standard Chartered Bank" },
+            { code: "070001", name: "NPF MicroFinance Bank" },
+            { code: "070008", name: "Page Financials" },
+            { code: "070009", name: "Gateway Mortgage Bank" },
+            { code: "070010", name: "Abbey Mortgage Bank" },
+            { code: "070011", name: "Refuge Mortgage Bank" },
+            { code: "070013", name: "Platinum Mortgage Bank" },
+            { code: "070016", name: "Infinity Trust Mortgage Bank" },
+            { code: "090107", name: "FIRSTTRUST MORTGAGE BANK" },
+            { code: "090177", name: "Lapo Microfinance Bank" },
+            { code: "090194", name: "NIRSAL Microfinance Bank" },
+            { code: "090262", name: "Stellas Microfinance Bank" },
+            { code: "090263", name: "Navy Microfinance Bank" },
+            { code: "090420", name: "Letshego MFB" },
+            { code: "090435", name: "Links Microfinance Bank" }
+        ];
+
+        function populateBankSelectors() {
+            const regSelect = document.getElementById("reg-bank-code");
+            const upgradeSelect = document.getElementById("upgrade-bank-code");
+            
+            // Sort options alphabetically for better UX
+            const sortedBanks = NIGERIAN_BANKS_DATASET.sort((a, b) => a.name.localeCompare(b.name));
+            
+            sortedBanks.forEach(bank => {
+                const optReg = document.createElement("option");
+                optReg.value = bank.code;
+                optReg.textContent = bank.name;
+                regSelect.appendChild(optReg);
+
+                const optUpgrade = document.createElement("option");
+                optUpgrade.value = bank.code;
+                optUpgrade.textContent = bank.name;
+                upgradeSelect.appendChild(optUpgrade);
+            });
+        }
 
         async function initConsole() {
             try {
@@ -497,10 +555,10 @@
                 const container = document.getElementById("inventory-feed-container");
                 container.innerHTML = products.length === 0 ? `<p style="text-align:center; padding:20px; font-size:13px; color:var(--hint);">No products inside store catalog yet.</p>` : "";
 
-                merchantCatalogCache = {}; // Clear previous memory map
+                merchantCatalogCache = {};
 
                 products.forEach(p => {
-                    merchantCatalogCache[p.id] = p; // Inject entity into secure object cache
+                    merchantCatalogCache[p.id] = p;
                     
                     const card = document.createElement("div");
                     card.className = "inventory-card";
@@ -625,7 +683,10 @@
             } catch(err) { tg.showAlert("Network lifecycle mutation error occurred."); }
         }
 
-        window.onload = initConsole;
+        window.onload = function() {
+            populateBankSelectors();
+            initConsole();
+        };
     </script>
 </body>
 </html>
