@@ -20,8 +20,8 @@ BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 DATABASE_URL = os.getenv("DATABASE_URL")
 ADMIN_ID = os.getenv("ADMIN_TELEGRAM_ID")
 APP_URL = os.getenv("RENDER_EXTERNAL_URL", "").rstrip("/")
-# Using FLW_SECRET_HASH to match your dashboard variable
 FLW_SECRET_HASH = os.getenv("FLW_SECRET_HASH", "BusinessHubSecureHash2026")
+FLW_SECRET_KEY = os.getenv("FLUTTERWAVE_SECRET_KEY") # Crucial for background subaccount APIs
 
 if not BOT_TOKEN or not DATABASE_URL:
     raise ValueError("CRITICAL ERROR: Environment variables TELEGRAM_BOT_TOKEN or DATABASE_URL are missing!")
@@ -62,6 +62,7 @@ class Vendor(Base):
     is_approved = Column(Boolean, default=True)
     bank_code = Column(String(50), nullable=True)
     account_number = Column(String(50), nullable=True)
+    subaccount_id = Column(String(100), nullable=True)  # Core mapping update for split architecture
 
 class Product(Base):
     __tablename__ = "products"
@@ -133,6 +134,38 @@ def validate_telegram_auth(init_data: str) -> Optional[dict]:
     except Exception:
         return None
 
+# --- FLUTTERWAVE CORE UTILS ---
+async def generate_flw_subaccount(bank_code: str, account_number: str, business_name: str, phone: str) -> Optional[str]:
+    """Helper module to handle upstream subaccount pipelines cleanly with flat 0-fee commissions"""
+    if not FLW_SECRET_KEY:
+        print("Split implementation failed: FLUTTERWAVE_SECRET_KEY missing from environment properties context.")
+        return None
+        
+    url = "https://api.flutterwave.com/v3/subaccounts"
+    headers = {
+        "Authorization": f"Bearer {FLW_SECRET_KEY}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "account_bank": bank_code,
+        "account_number": account_number,
+        "business_name": business_name,
+        "business_mobile": phone,
+        "country": "NG",
+        "split_type": "flat",
+        "split_value": 0  # 0 platform commission means 100% net goes to vendor wallet maps
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            res = await client.post(url, json=payload, headers=headers, timeout=10.0)
+            if res.status_code in [200, 201]:
+                return res.json().get("data", {}).get("subaccount_id")
+            print(f"Upstream subaccount creation failure reason: {res.text}")
+            return None
+    except Exception as e:
+        print(f"Gateway pipeline timeout/transport failure: {e}")
+        return None
+
 # --- ROUTE TEMPLATE ENDPOINTS ---
 @app.get("/")
 async def root_redirect():
@@ -142,16 +175,15 @@ async def root_redirect():
 async def serve_shop(request: Request):
     return templates.TemplateResponse(request=request, name="shop.html")
 
-# --- FIXED SECTION: Aliased /webapp/register to fix the vendor 404 ---
 @app.get("/vendor")
 @app.get("/webapp/register")
 async def serve_vendor(request: Request):
     return templates.TemplateResponse(request=request, name="vendor.html")
 
+# --- HEALTH ROUTE ENGINE FOR CRONJOB SERVICE PINGS ---
 @app.get("/api/health")
-async def health_check():
+async def cronjob_health_checkpoint():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
-    
 
 # --- TELEGRAM BOT WEBHOOK ROUTER ---
 @app.post("/webhook")
@@ -219,7 +251,20 @@ async def verify_vendor_session(request: Request, db: Session = Depends(get_db))
     if not vendor:
         return {"registered": False}
     
-    has_payout = bool(vendor.bank_code and vendor.account_number)
+    # DYNAMIC MIGRATION LAYER: Automatically registers subaccounts for existing legacy vendors
+    if vendor.bank_code and vendor.account_number and not vendor.subaccount_id:
+        sub_id = await generate_flw_subaccount(
+            bank_code=vendor.bank_code,
+            account_number=vendor.account_number,
+            business_name=vendor.business_name,
+            phone=vendor.phone_number
+        )
+        if sub_id:
+            vendor.subaccount_id = sub_id
+            db.commit()
+            db.refresh(vendor)
+            
+    has_payout = bool(vendor.bank_code and vendor.account_number and vendor.subaccount_id)
     
     return {
         "registered": True,
@@ -258,19 +303,36 @@ async def register_or_edit_vendor(
         clean_phone = "234" + clean_phone[1:]
 
     vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    
+    # Process or modify subaccount configurations dynamically
+    target_subaccount_id = vendor.subaccount_id if vendor else None
+    
+    if bank_code and account_number:
+        if len(account_number) != 10 or not account_number.isdigit():
+            raise HTTPException(status_code=400, detail="Invalid NUBAN Account Number. Must be exactly 10 digits.")
+            
+        # Trigger creation if bank profile is updated or freshly established
+        if not vendor or vendor.bank_code != bank_code or vendor.account_number != account_number:
+            created_id = await generate_flw_subaccount(bank_code, account_number, business_name, clean_phone)
+            if not created_id and not target_subaccount_id:
+                raise HTTPException(status_code=400, detail="Failed to register split settlement parameters with Flutterwave.")
+            if created_id:
+                target_subaccount_id = created_id
+
     if vendor:
         vendor.business_name = business_name
         vendor.bio = bio
         vendor.phone_number = clean_phone
+        if bank_code:
+            vendor.bank_code = bank_code
+            vendor.account_number = account_number
+            vendor.subaccount_id = target_subaccount_id
         if logo_data_url:
             vendor.logo_url = logo_data_url
     else:
         if not bank_code or not account_number:
             raise HTTPException(status_code=400, detail="Bank settlement properties required for registration.")
             
-        if len(account_number) != 10 or not account_number.isdigit():
-            raise HTTPException(status_code=400, detail="Invalid NUBAN Account Number. Must be exactly 10 digits.")
-
         vendor = Vendor(
             vendor_id=user['id'], 
             business_name=business_name, 
@@ -278,7 +340,8 @@ async def register_or_edit_vendor(
             phone_number=clean_phone, 
             logo_url=logo_data_url,
             bank_code=bank_code,
-            account_number=account_number
+            account_number=account_number,
+            subaccount_id=target_subaccount_id
         )
         db.add(vendor)
         
@@ -303,8 +366,13 @@ async def upgrade_legacy_vendor_payout(
     if len(payload.account_number) != 10 or not payload.account_number.isdigit():
         raise HTTPException(status_code=400, detail="Invalid account formatting sequence.")
         
+    created_id = await generate_flw_subaccount(payload.bank_code, payload.account_number, vendor.business_name, vendor.phone_number)
+    if not created_id:
+        raise HTTPException(status_code=400, detail="Upstream banking verification trace failed on split initialization.")
+        
     vendor.bank_code = payload.bank_code
     vendor.account_number = payload.account_number
+    vendor.subaccount_id = created_id
     db.commit()
     
     return {"success": True}
@@ -469,7 +537,14 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     db.add(new_order)
     db.commit()
 
-    return {"success": True, "order_code": generated_code, "total_amount": calculated_total, "vendor_phone": vendor_phone}
+    # Pass subaccount_id directly to front-facing payment payloads
+    return {
+        "success": True, 
+        "order_code": generated_code, 
+        "total_amount": calculated_total, 
+        "vendor_phone": vendor_phone,
+        "subaccount_id": vendor_profile.subaccount_id if vendor_profile else None
+    }
 
 # --- REAL-TIME SECURE GATEWAY WEBHOOK HUB ---
 @app.post("/api/v1/payments/webhook")
