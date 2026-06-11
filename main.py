@@ -148,6 +148,11 @@ async def serve_shop(request: Request):
 async def serve_vendor(request: Request):
     return templates.TemplateResponse(request=request, name="vendor.html")
 
+@app.get("/api/health")
+async def health_check():
+    return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+    
+
 # --- TELEGRAM BOT WEBHOOK ROUTER ---
 @app.post("/webhook")
 async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_db)):
