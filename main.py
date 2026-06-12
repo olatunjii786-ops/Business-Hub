@@ -309,10 +309,6 @@ async def hard_delete_vendor_profile(vendor_id: int, request: Request, db: Sessi
     return {"success": True, "message": "Vendor and catalog metadata purged successfully."}
 
 # --- ROUTE TEMPLATE ENDPOINTS ---
-@app.get("/")
-async def root_redirect():
-    return RedirectResponse(url="/shop")
-
 @app.get("/shop")
 async def serve_shop(request: Request):
     return templates.TemplateResponse(request=request, name="shop.html")
@@ -321,17 +317,16 @@ async def serve_shop(request: Request):
 @app.get("/webapp/register")
 async def serve_vendor(request: Request):
     return templates.TemplateResponse(request=request, name="vendor.html")
-    
-    @app.get("/admin/dashboard")
+
+@app.get("/admin/dashboard")
 async def serve_admin_dashboard(request: Request):
-    """Serves the visual Admin Control Deck HTML file"""
     return templates.TemplateResponse(request=request, name="admin.html")
-    
 
 # --- HEALTH ROUTE ENGINE FOR CRONJOB SERVICE PINGS ---
 @app.get("/api/health")
 async def cronjob_health_checkpoint():
     return {"status": "healthy", "timestamp": datetime.now(timezone.utc).isoformat()}
+
 
 # --- TELEGRAM BOT WEBHOOK ROUTER ---
 @app.post("/webhook")
