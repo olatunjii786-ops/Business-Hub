@@ -52,6 +52,12 @@ def get_db():
         db.close()
 
 # --- RELATIONAL DATA MODELS ---
+class AdminConfig(Base):
+    __tablename__ = "admin_configs"
+    id = Column(Integer, primary_key=True, index=True)
+    config_key = Column(String(100), unique=True, nullable=False)
+    config_value = Column(Float, default=0.0)
+
 class Vendor(Base):
     __tablename__ = "vendors"
     vendor_id = Column(BigInteger, primary_key=True)
@@ -60,6 +66,7 @@ class Vendor(Base):
     phone_number = Column(String(20), nullable=False)
     logo_url = Column(Text, nullable=True)
     is_approved = Column(Boolean, default=True)
+    is_banned = Column(Boolean, default=False)  # Admin Security Gate Check
     bank_code = Column(String(50), nullable=True)
     account_number = Column(String(50), nullable=True)
     subaccount_id = Column(String(100), nullable=True)  
@@ -109,6 +116,13 @@ class PayoutUpgradePayload(BaseModel):
 class StatusPayload(BaseModel):
     status: str
 
+class CommissionPayload(BaseModel):
+    commission_percentage: float
+
+class BanVendorPayload(BaseModel):
+    vendor_id: int
+    ban_status: bool
+
 # --- TELEGRAM BOT UTILS ---
 async def send_telegram_alert(chat_id: int, message: str):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
@@ -137,7 +151,6 @@ def validate_telegram_auth(init_data: str) -> Optional[dict]:
 # --- AUTOMATED BANK REGISTRY DISCOVERY ENDPOINT ---
 @app.get("/api/banks")
 async def get_supported_banks():
-    """Returns official live bank registry to populate WebApp dropdown selectors dynamically"""
     if not FLW_SECRET_KEY:
         return []
         
@@ -158,8 +171,7 @@ async def get_supported_banks():
         return []
 
 # --- FLUTTERWAVE CORE UTILS ---
-async def generate_flw_subaccount(bank_code: str, account_number: str, business_name: str, phone: str, vendor_id: int) -> Optional[str]:
-    """Helper module to handle upstream subaccount pipelines with dynamic upstream bank lookup"""
+async def generate_flw_subaccount(bank_code: str, account_number: str, business_name: str, phone: str, vendor_id: int, db: Session) -> Optional[str]:
     if not FLW_SECRET_KEY:
         print("Split implementation failed: FLUTTERWAVE_SECRET_KEY missing from environment properties context.")
         return None
@@ -172,7 +184,6 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
     
     resolved_bank_code = None
 
-    # 1. DYNAMIC FLUTTERWAVE BANK DISCOVERY
     try:
         async with httpx.AsyncClient() as client:
             banks_res = await client.get("https://api.flutterwave.com/v3/banks/NG", headers=headers, timeout=8.0)
@@ -195,7 +206,7 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
                         bank_name_lower = bank.get("name", "").lower()
                         if any(term in bank_name_lower for term in terms):
                             resolved_bank_code = bank.get("code")
-                            print(f"--> Dynamically mapped {bank_code} to Flutterwave code: {resolved_bank_code} ({bank.get('name')})")
+                            print(f"--> Dynamically mapped {bank_code} to Flutterwave code: {resolved_bank_code}")
                             break
     except Exception as fetch_err:
         print(f"Warning: Failed to perform live bank discovery lookup: {fetch_err}")
@@ -205,6 +216,12 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
 
     fallback_email = f"vendor_{vendor_id}@businesshub.internal"
     
+    # FETCH DYNAMIC COMMISSION TO CALCULATE CORRECT VENDOR FRACTIONAL SPLIT
+    config_row = db.query(AdminConfig).filter(AdminConfig.config_key == "global_commission").first()
+    admin_commission = config_row.config_value if config_row else 0.0
+    vendor_share_fraction = (100.0 - admin_commission) / 100.0
+    
+    # REMAPPED TO PERCENTAGE SPLIT POOL SETUP FOR COMPATIBILITY WITH OPAY WALLETS
     payload = {
         "account_bank": resolved_bank_code,
         "account_number": account_number,
@@ -212,8 +229,8 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
         "business_mobile": phone,
         "business_email": fallback_email,
         "country": "NG",
-        "split_type": "flat",
-        "split_value": 0  
+        "split_type": "percentage",
+        "split_value": vendor_share_fraction  
     }
     
     try:
@@ -226,6 +243,70 @@ async def generate_flw_subaccount(bank_code: str, account_number: str, business_
     except Exception as e:
         print(f"Gateway pipeline timeout/transport failure: {e}")
         return None
+
+# --- ADMINISTRATIVE DECK SECURITY VERIFIER ---
+def verify_admin_privileges(request: Request) -> bool:
+    init_data = request.headers.get("X-Telegram-Init-Data")
+    user = validate_telegram_auth(init_data)
+    if not user or str(user.get('id')) != str(ADMIN_ID):
+        raise HTTPException(status_code=403, detail="Access Denied: Administrative Rights Required.")
+    return True
+
+# --- ADMINISTRATIVE SYSTEM CONTROLS ---
+@app.post("/api/admin/commission")
+async def update_platform_commission(payload: CommissionPayload, request: Request, db: Session = Depends(get_db)):
+    verify_admin_privileges(request)
+    if payload.commission_percentage < 0 or payload.commission_percentage > 100:
+        raise HTTPException(status_code=400, detail="Commission split configuration must sit between 0% and 100%")
+        
+    config = db.query(AdminConfig).filter(AdminConfig.config_key == "global_commission").first()
+    if not config:
+        config = AdminConfig(config_key="global_commission", config_value=payload.commission_percentage)
+        db.add(config)
+    else:
+        config.config_value = payload.commission_percentage
+    db.commit()
+    return {"success": True, "message": f"Global infrastructure commission configured to {payload.commission_percentage}%"}
+
+@app.get("/api/admin/overview")
+async def get_admin_dashboard_metrics(request: Request, db: Session = Depends(get_db)):
+    verify_admin_privileges(request)
+    config = db.query(AdminConfig).filter(AdminConfig.config_key == "global_commission").first()
+    current_commission = config.config_value if config else 0.0
+    
+    vendors = db.query(Vendor).all()
+    vendor_list = [{
+        "vendor_id": v.vendor_id,
+        "business_name": v.business_name,
+        "phone_number": v.phone_number,
+        "is_banned": v.is_banned,
+        "subaccount_id": v.subaccount_id
+    } for v in vendors]
+    
+    return {"current_commission": current_commission, "vendors": vendor_list}
+
+@app.post("/api/admin/vendors/ban")
+async def toggle_vendor_ban_status(payload: BanVendorPayload, request: Request, db: Session = Depends(get_db)):
+    verify_admin_privileges(request)
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == payload.vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Target vendor profile missing.")
+        
+    vendor.is_banned = payload.ban_status
+    db.commit()
+    return {"success": True, "message": f"Vendor ban status updated to: {payload.ban_status}"}
+
+@app.delete("/api/admin/vendors/{vendor_id}")
+async def hard_delete_vendor_profile(vendor_id: int, request: Request, db: Session = Depends(get_db)):
+    verify_admin_privileges(request)
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == vendor_id).first()
+    if not vendor:
+        raise HTTPException(status_code=404, detail="Vendor trace missing from database rows.")
+        
+    db.query(Product).filter(Product.vendor_id == vendor_id).delete()
+    db.delete(vendor)
+    db.commit()
+    return {"success": True, "message": "Vendor and catalog metadata purged successfully."}
 
 # --- ROUTE TEMPLATE ENDPOINTS ---
 @app.get("/")
@@ -259,7 +340,14 @@ async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_
             if user_text.startswith("/start"):
                 parts = user_text.split(" ", 1)
                 if len(parts) > 1 and parts[1].isdigit():
-                    target_vendor_id = parts[1]
+                    target_vendor_id = int(parts[1])
+                    
+                    # Security Check: Prevent loading boutiques for banned users
+                    v_check = db.query(Vendor).filter(Vendor.vendor_id == target_vendor_id).first()
+                    if v_check and v_check.is_banned:
+                        await send_telegram_alert(chat_id, "⚠️ This boutique storefront is currently suspended.")
+                        return {"status": "ok"}
+                        
                     welcome_msg = (
                         f"🛍 *Welcome to Business Hub!*\n\n"
                         f"You have opened a direct merchant boutique page.\n\n"
@@ -311,6 +399,9 @@ async def verify_vendor_session(request: Request, db: Session = Depends(get_db))
     vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
     if not vendor:
         return {"registered": False}
+        
+    if vendor.is_banned:
+        raise HTTPException(status_code=403, detail="Your vendor console access has been suspended.")
     
     if vendor.bank_code and vendor.account_number and not vendor.subaccount_id:
         sub_id = await generate_flw_subaccount(
@@ -318,7 +409,8 @@ async def verify_vendor_session(request: Request, db: Session = Depends(get_db))
             account_number=vendor.account_number,
             business_name=vendor.business_name,
             phone=vendor.phone_number,
-            vendor_id=vendor.vendor_id
+            vendor_id=vendor.vendor_id,
+            db=db
         )
         if sub_id:
             vendor.subaccount_id = sub_id
@@ -353,6 +445,10 @@ async def register_or_edit_vendor(
     if not user:
         raise HTTPException(status_code=403, detail="Security auth missing")
     
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if vendor and vendor.is_banned:
+        raise HTTPException(status_code=403, detail="Action prohibited. Vendor workspace suspended.")
+
     logo_data_url = None
     if logo and logo.filename:
         file_contents = await logo.read()
@@ -363,7 +459,6 @@ async def register_or_edit_vendor(
     if clean_phone.startswith("0") and len(clean_phone) == 11:
         clean_phone = "234" + clean_phone[1:]
 
-    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
     target_subaccount_id = vendor.subaccount_id if vendor else None
     
     if bank_code and account_number:
@@ -371,7 +466,7 @@ async def register_or_edit_vendor(
             raise HTTPException(status_code=400, detail="Invalid NUBAN Account Number. Must be exactly 10 digits.")
             
         if not vendor or vendor.bank_code != bank_code or vendor.account_number != account_number:
-            created_id = await generate_flw_subaccount(bank_code, account_number, business_name, clean_phone, user['id'])
+            created_id = await generate_flw_subaccount(bank_code, account_number, business_name, clean_phone, user['id'], db=db)
             if not created_id and not target_subaccount_id:
                 raise HTTPException(status_code=400, detail="Failed to register split settlement parameters with Flutterwave.")
             if created_id:
@@ -399,7 +494,8 @@ async def register_or_edit_vendor(
             logo_url=logo_data_url,
             bank_code=bank_code,
             account_number=account_number,
-            subaccount_id=target_subaccount_id
+            subaccount_id=target_subaccount_id,
+            is_banned=False
         )
         db.add(vendor)
         
@@ -407,11 +503,7 @@ async def register_or_edit_vendor(
     return {"success": True}
 
 @app.post("/api/vendor/upgrade-payout")
-async def upgrade_legacy_vendor_payout(
-    payload: PayoutUpgradePayload,
-    request: Request,
-    db: Session = Depends(get_db)
-):
+async def upgrade_legacy_vendor_payout(payload: PayoutUpgradePayload, request: Request, db: Session = Depends(get_db)):
     init_data = request.headers.get("X-Telegram-Init-Data")
     user = validate_telegram_auth(init_data)
     if not user:
@@ -420,11 +512,13 @@ async def upgrade_legacy_vendor_payout(
     vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
     if not vendor:
         raise HTTPException(status_code=404, detail="Vendor account missing.")
+    if vendor.is_banned:
+        raise HTTPException(status_code=403, detail="Account is suspended.")
         
     if len(payload.account_number) != 10 or not payload.account_number.isdigit():
         raise HTTPException(status_code=400, detail="Invalid account formatting sequence.")
         
-    created_id = await generate_flw_subaccount(payload.bank_code, payload.account_number, vendor.business_name, vendor.phone_number, vendor.vendor_id)
+    created_id = await generate_flw_subaccount(payload.bank_code, payload.account_number, vendor.business_name, vendor.phone_number, vendor.vendor_id, db=db)
     if not created_id:
         raise HTTPException(status_code=400, detail="Upstream banking verification trace failed on split initialization.")
         
@@ -432,18 +526,12 @@ async def upgrade_legacy_vendor_payout(
     vendor.account_number = payload.account_number
     vendor.subaccount_id = created_id
     db.commit()
-    
     return {"success": True}
 
 @app.post("/api/products")
 async def create_new_product(
-    request: Request,
-    title: str = Form(...),
-    price: float = Form(...),
-    quantity: int = Form(...),
-    sizes: str = Form(""),
-    category: str = Form("General"),
-    image: Optional[UploadFile] = File(None),
+    request: Request, title: str = Form(...), price: float = Form(...), quantity: int = Form(...),
+    sizes: str = Form(""), category: str = Form("General"), image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     init_data = request.headers.get("X-Telegram-Init-Data")
@@ -451,6 +539,10 @@ async def create_new_product(
     if not user:
         raise HTTPException(status_code=403, detail="Invalid request parameters")
     
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if vendor and vendor.is_banned:
+        raise HTTPException(status_code=403, detail="Banned vendors cannot spawn inventory items.")
+
     image_data_url = None
     if image and image.filename:
         file_contents = await image.read()
@@ -458,13 +550,8 @@ async def create_new_product(
         image_data_url = f"data:{image.content_type};base64,{encoded}"
 
     new_product = Product(
-        vendor_id=user['id'], 
-        title=title, 
-        price=price, 
-        quantity=quantity, 
-        sizes=sizes, 
-        category=category.strip(), 
-        image_url=image_data_url
+        vendor_id=user['id'], title=title, price=price, quantity=quantity, 
+        sizes=sizes, category=category.strip(), image_url=image_data_url
     )
     db.add(new_product)
     db.commit()
@@ -472,14 +559,8 @@ async def create_new_product(
 
 @app.post("/api/products/{product_id}/edit")
 async def modify_product_entry(
-    product_id: int,
-    request: Request,
-    title: str = Form(...),
-    price: float = Form(...),
-    quantity: int = Form(...),
-    sizes: str = Form(""),
-    category: str = Form("General"),
-    image: Optional[UploadFile] = File(None),
+    product_id: int, request: Request, title: str = Form(...), price: float = Form(...), quantity: int = Form(...),
+    sizes: str = Form(""), category: str = Form("General"), image: Optional[UploadFile] = File(None),
     db: Session = Depends(get_db)
 ):
     init_data = request.headers.get("X-Telegram-Init-Data")
@@ -487,6 +568,10 @@ async def modify_product_entry(
     if not user:
         raise HTTPException(status_code=403, detail="Auth trace invalid")
         
+    vendor = db.query(Vendor).filter(Vendor.vendor_id == user['id']).first()
+    if vendor and vendor.is_banned:
+        raise HTTPException(status_code=403, detail="Suspended profile modifications blocked.")
+
     product = db.query(Product).filter(Product.id == product_id, Product.vendor_id == user['id']).first()
     if not product:
         raise HTTPException(status_code=404, detail="Product missing")
@@ -500,8 +585,7 @@ async def modify_product_entry(
     if image and image.filename:
         file_contents = await image.read()
         encoded = base64.b64encode(file_contents).decode("utf-8")
-        image_data_url = f"data:{image.content_type};base64,{encoded}"
-        product.image_url = image_data_url
+        product.image_url = f"data:{image.content_type};base64,{encoded}"
         
     db.commit()
     return {"success": True}
@@ -535,8 +619,9 @@ async def list_vendor_products(request: Request, db: Session = Depends(get_db)):
 async def load_storefront_configuration(vendor_id: Optional[int] = None, db: Session = Depends(get_db)):
     if vendor_id:
         v = db.query(Vendor).filter(Vendor.vendor_id == vendor_id).first()
-        if not v:
+        if not v or v.is_banned:
             return {"mode": "marketplace", "vendors": [], "products": []}
+            
         products = db.query(Product).filter(Product.vendor_id == vendor_id).order_by(Product.id.desc()).all()
         return {
             "mode": "store",
@@ -544,11 +629,14 @@ async def load_storefront_configuration(vendor_id: Optional[int] = None, db: Ses
             "products": [{"id": p.id, "title": p.title, "price": p.price, "quantity": p.quantity, "sizes": p.sizes, "category": p.category, "image_url": p.image_url} for p in products]
         }
     
-    vendors = db.query(Vendor).all()
-    products = db.query(Product).order_by(Product.id.desc()).limit(150).all()
+    # Marketplace View: Omit Banned Vendor Nodes
+    active_vendors = db.query(Vendor).filter(Vendor.is_banned == False).all()
+    active_vendor_ids = [v.vendor_id for v in active_vendors]
+    
+    products = db.query(Product).filter(Product.vendor_id.in_(active_vendor_ids)).order_by(Product.id.desc()).limit(150).all()
     return {
         "mode": "marketplace",
-        "vendors": [{"id": ven.vendor_id, "name": ven.business_name, "logo": ven.logo_url} for ven in vendors],
+        "vendors": [{"id": ven.vendor_id, "name": ven.business_name, "logo": ven.logo_url} for ven in active_vendors],
         "products": [{"id": p.id, "vendor_id": p.vendor_id, "title": p.title, "price": p.price, "quantity": p.quantity, "sizes": p.sizes, "category": p.category, "image_url": p.image_url} for p in products]
     }
 
@@ -558,7 +646,6 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     user = validate_telegram_auth(init_data)
     if not user:
         raise HTTPException(status_code=403, detail="Session expired")
-
     if not req.items:
         raise HTTPException(status_code=400, detail="Cart manifest is empty")
 
@@ -569,6 +656,9 @@ async def run_checkout_pipeline(req: CheckoutRequest, request: Request, db: Sess
     
     target_vendor_id = sample.vendor_id
     vendor_profile = db.query(Vendor).filter(Vendor.vendor_id == target_vendor_id).first()
+    if vendor_profile and vendor_profile.is_banned:
+        raise HTTPException(status_code=400, detail="Checkout aborted: Merchant shop is inactive.")
+        
     vendor_phone = vendor_profile.phone_number if vendor_profile else "2348000000000"
 
     calculated_total = 0.0
@@ -608,7 +698,6 @@ async def flutterwave_payment_webhook(request: Request, db: Session = Depends(ge
         raise HTTPException(status_code=401, detail="Webhook signature check verification trace failed.")
 
     payload = await request.json()
-    
     if payload.get("status") == "successful" or payload.get("data", {}).get("status") == "successful":
         tx_data = payload.get("data", {})
         target_order_code = tx_data.get("tx_ref")
@@ -667,7 +756,6 @@ async def user_cancel_pending_order(order_id: int, request: Request, db: Session
     order = db.query(Order).filter(Order.id == order_id, Order.customer_id == user['id']).first()
     if not order:
         raise HTTPException(status_code=404, detail="Order missing")
-        
     if order.status != "pending":
         raise HTTPException(status_code=400, detail="Cannot cancel confirmed order")
         
