@@ -329,6 +329,7 @@ async def cronjob_health_checkpoint():
 
 
 # --- TELEGRAM BOT WEBHOOK ROUTER ---
+# --- TELEGRAM BOT WEBHOOK ROUTER ---
 @app.post("/webhook")
 async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_db)):
     try:
@@ -338,12 +339,40 @@ async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_
             chat_id = message["chat"]["id"]
             user_text = message.get("text", "").strip()
             
+            # 1. NEW COMMAND: /admin (Strictly for you)
+            if user_text == "/admin":
+                if str(chat_id) != str(ADMIN_ID):
+                    await send_telegram_alert(chat_id, "❌ Prohibited: You do not have administrative access rights.")
+                    return {"status": "ok"}
+                    
+                welcome_msg = (
+                    f"⚡ *System Control Deck Activated.*\n\n"
+                    f"Welcome back, Chief. Access your master admin panel below:"
+                )
+                keyboard = {
+                    "inline_keyboard": [[
+                        {"text": "📊 Open Control Deck", "web_app": {"url": f"{APP_URL}/admin/dashboard"}}
+                    ]]
+                }
+                
+                url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
+                async with httpx.AsyncClient() as client:
+                    await client.post(url, json={
+                        "chat_id": chat_id,
+                        "text": welcome_msg,
+                        "parse_mode": "Markdown",
+                        "reply_markup": keyboard
+                    }, timeout=5.0)
+                return {"status": "ok"}
+
+            # 2. COMMAND: /start
             if user_text.startswith("/start"):
                 parts = user_text.split(" ", 1)
+                
+                # Deep-linking check for customers opening a specific shop
                 if len(parts) > 1 and parts[1].isdigit():
                     target_vendor_id = int(parts[1])
                     
-                    # Security Check: Prevent loading boutiques for banned users
                     v_check = db.query(Vendor).filter(Vendor.vendor_id == target_vendor_id).first()
                     if v_check and v_check.is_banned:
                         await send_telegram_alert(chat_id, "⚠️ This boutique storefront is currently suspended.")
@@ -362,18 +391,35 @@ async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_
                             }
                         ]]
                     }
+                
+                # Base /start menu
                 else:
-                    welcome_msg = (
-                        f"👋 *Welcome to the Business Hub Ecosystem!*\n\n"
-                        f"Are you a customer ready to shop top-tier products, or a vendor looking to manage your boutique automation?\n\n"
-                        f"Launch your workspace window instantly using the control deck below:"
-                    )
-                    keyboard = {
-                        "inline_keyboard": [
-                            [{"text": "🛍 Open Global Marketplace", "web_app": {"url": f"{APP_URL}/shop"}}],
-                            [{"text": "🛠 Open Vendor Workspace Console", "web_app": {"url": f"{APP_URL}/vendor"}}]
-                        ]
-                    }
+                    # Tailored menu if the admin runs /start
+                    if str(chat_id) == str(ADMIN_ID):
+                        welcome_msg = (
+                            f"⚡ *Welcome Back, Chief System Admin.*\n\n"
+                            f"Ecosystem control parameters are healthy. Select your destination workspace below:"
+                        )
+                        keyboard = {
+                            "inline_keyboard": [
+                                [{"text": "📊 Open System Control Deck", "web_app": {"url": f"{APP_URL}/admin/dashboard"}}],
+                                [{"text": "🛍 Open Global Marketplace", "web_app": {"url": f"{APP_URL}/shop"}}],
+                                [{"text": "🛠 Open Vendor Workspace Console", "web_app": {"url": f"{APP_URL}/vendor"}}]
+                            ]
+                        }
+                    # Standard menu for all other users/vendors
+                    else:
+                        welcome_msg = (
+                            f"👋 *Welcome to the Business Hub Ecosystem!*\n\n"
+                            f"Are you a customer ready to shop top-tier products, or a vendor looking to manage your boutique automation?\n\n"
+                            f"Launch your workspace window instantly using the control deck below:"
+                        )
+                        keyboard = {
+                            "inline_keyboard": [
+                                [{"text": "🛍 Open Global Marketplace", "web_app": {"url": f"{APP_URL}/shop"}}],
+                                [{"text": "🛠 Open Vendor Workspace Console", "web_app": {"url": f"{APP_URL}/vendor"}}]
+                            ]
+                        }
                 
                 url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
                 async with httpx.AsyncClient() as client:
@@ -388,6 +434,7 @@ async def telegram_webhook_endpoint(request: Request, db: Session = Depends(get_
     except Exception as e:
         print(f"Webhook error: {e}")
         return {"status": "error", "detail": str(e)}
+
 
 # --- ENDPOINTS CONFIGURATION ---
 @app.get("/api/vendor/me")
