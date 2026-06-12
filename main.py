@@ -321,6 +321,12 @@ async def serve_shop(request: Request):
 @app.get("/webapp/register")
 async def serve_vendor(request: Request):
     return templates.TemplateResponse(request=request, name="vendor.html")
+    
+    @app.get("/admin/dashboard")
+async def serve_admin_dashboard(request: Request):
+    """Serves the visual Admin Control Deck HTML file"""
+    return templates.TemplateResponse(request=request, name="admin.html")
+    
 
 # --- HEALTH ROUTE ENGINE FOR CRONJOB SERVICE PINGS ---
 @app.get("/api/health")
